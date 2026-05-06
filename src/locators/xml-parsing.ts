@@ -3,14 +3,15 @@
  */
 
 import { DOMParser } from '@xmldom/xmldom';
+import type { Document as XMLDocument, Element as XMLElement, Node as XMLNode } from '@xmldom/xmldom';
 import xpath from 'xpath';
 import type { ElementAttributes, JSONElement, Bounds, UniquenessResult } from './types';
 
 /**
  * Get child nodes that are elements (not text nodes, comments, etc.)
  */
-function childNodesOf(node: Node): Node[] {
-  const children: Node[] = [];
+function childNodesOf(node: XMLNode): XMLNode[] {
+  const children: XMLNode[] = [];
   if (node.childNodes) {
     for (let i = 0; i < node.childNodes.length; i++) {
       const child = node.childNodes.item(i);
@@ -26,13 +27,13 @@ function childNodesOf(node: Node): Node[] {
  * Recursively translate DOM node to JSONElement
  */
 function translateRecursively(
-  domNode: Node,
+  domNode: XMLNode,
   parentPath: string = '',
   index: number | null = null,
 ): JSONElement {
   const attributes: ElementAttributes = {};
 
-  const element = domNode as Element;
+  const element = domNode as XMLElement;
   if (element.attributes) {
     for (let attrIdx = 0; attrIdx < element.attributes.length; attrIdx++) {
       const attr = element.attributes.item(attrIdx);
@@ -46,7 +47,7 @@ function translateRecursively(
 
   return {
     children: childNodesOf(domNode).map((childNode, childIndex) =>
-      translateRecursively(childNode, path, childIndex),
+      translateRecursively(childNode as XMLNode, path, childIndex),
     ),
     tagName: domNode.nodeName,
     attributes,
@@ -58,10 +59,10 @@ function translateRecursively(
  * Compare two nodes for equality by platform-specific attributes
  * (reference equality via === may fail when nodes come from different traversals)
  */
-function isSameElement(node1: Node, node2: Node): boolean {
+function isSameElement(node1: XMLNode, node2: XMLNode): boolean {
   if (node1.nodeType !== 1 || node2.nodeType !== 1) return false;
-  const el1 = node1 as Element;
-  const el2 = node2 as Element;
+  const el1 = node1 as XMLElement;
+  const el2 = node2 as XMLElement;
 
   if (el1.nodeName !== el2.nodeName) return false;
 
@@ -97,6 +98,7 @@ export function xmlToJSON(sourceXML: string): JSONElement | null {
     const parser = new DOMParser();
     const sourceDoc = parser.parseFromString(sourceXML, 'text/xml');
 
+    // xmldom 0.9+ throws ParseError for fatal errors (caught below); this catches non-fatal cases
     const parseErrors = sourceDoc.getElementsByTagName('parsererror');
     if (parseErrors.length > 0) {
       console.error('[xmlToJSON] XML parsing error:', parseErrors[0].textContent);
@@ -120,11 +122,12 @@ export function xmlToJSON(sourceXML: string): JSONElement | null {
 /**
  * Parse XML source to DOM Document for XPath evaluation
  */
-export function xmlToDOM(sourceXML: string): Document | null {
+export function xmlToDOM(sourceXML: string): XMLDocument | null {
   try {
     const parser = new DOMParser();
     const doc = parser.parseFromString(sourceXML, 'text/xml');
 
+    // xmldom 0.9+ throws ParseError for fatal errors (caught below); this catches non-fatal cases
     const parseErrors = doc.getElementsByTagName('parsererror');
     if (parseErrors.length > 0) {
       console.error('[xmlToDOM] XML parsing error:', parseErrors[0].textContent);
@@ -141,11 +144,12 @@ export function xmlToDOM(sourceXML: string): Document | null {
 /**
  * Execute XPath query on DOM document
  */
-export function evaluateXPath(doc: Document, xpathExpr: string): Node[] {
+export function evaluateXPath(doc: XMLDocument, xpathExpr: string): XMLNode[] {
   try {
-    const nodes = xpath.select(xpathExpr, doc);
+    // @xmldom/xmldom 0.9+ types don't satisfy global Node; xpath still works at runtime
+    const nodes = xpath.select(xpathExpr, doc as unknown as Node);
     if (Array.isArray(nodes)) {
-      return nodes as Node[];
+      return nodes as unknown as XMLNode[];
     }
     return [];
   } catch (e) {
@@ -158,9 +162,9 @@ export function evaluateXPath(doc: Document, xpathExpr: string): Node[] {
  * Check if an XPath selector is unique and get index if not
  */
 export function checkXPathUniqueness(
-  doc: Document,
+  doc: XMLDocument,
   xpathExpr: string,
-  targetNode?: Node,
+  targetNode?: XMLNode,
 ): UniquenessResult {
   try {
     const nodes = evaluateXPath(doc, xpathExpr);
@@ -197,16 +201,16 @@ export function checkXPathUniqueness(
 /**
  * Find DOM node by JSONElement path (e.g., "0.2.1")
  */
-export function findDOMNodeByPath(doc: Document, path: string): Node | null {
+export function findDOMNodeByPath(doc: XMLDocument, path: string): XMLNode | null {
   if (!path) return doc.documentElement;
 
   const indices = path.split('.').map(Number);
-  let current: Node | null = doc.documentElement;
+  let current: XMLNode | null = doc.documentElement;
 
   for (const index of indices) {
     if (!current) return null;
 
-    const children: Node[] = [];
+    const children: XMLNode[] = [];
     if (current.childNodes) {
       for (let i = 0; i < current.childNodes.length; i++) {
         const child = current.childNodes.item(i);

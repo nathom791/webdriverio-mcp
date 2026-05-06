@@ -2,7 +2,8 @@
  * Locator strategy generation for mobile elements
  */
 
-import type { JSONElement, LocatorStrategy, LocatorContext, UniquenessResult } from './types';
+import type { JSONElement, LocatorStrategy, LocatorContext, UniquenessResult, XMLNode, XMLDocument } from './types';
+import type { Element as XMLElement } from '@xmldom/xmldom';
 import { checkXPathUniqueness, evaluateXPath, isAttributeUnique } from './xml-parsing';
 
 /**
@@ -64,7 +65,7 @@ function generateIndexedUiAutomator(baseSelector: string, index: number): string
 function checkUniqueness(
   ctx: LocatorContext,
   xpath: string,
-  targetNode?: Node,
+  targetNode?: XMLNode,
 ): UniquenessResult {
   if (ctx.parsedDOM) {
     return checkXPathUniqueness(ctx.parsedDOM, xpath, targetNode);
@@ -81,7 +82,7 @@ function checkUniqueness(
 /**
  * Get sibling index (1-based) among same-tag siblings
  */
-function getSiblingIndex(element: Element): number {
+function getSiblingIndex(element: XMLElement): number {
   const parent = element.parentNode;
   if (!parent) return 1;
 
@@ -102,7 +103,7 @@ function getSiblingIndex(element: Element): number {
 /**
  * Count siblings with same tag name
  */
-function countSiblings(element: Element): number {
+function countSiblings(element: XMLElement): number {
   const parent = element.parentNode;
   if (!parent) return 1;
 
@@ -122,7 +123,7 @@ function countSiblings(element: Element): number {
 /**
  * Find unique attribute for element in XPath format
  */
-function findUniqueAttribute(element: Element, ctx: LocatorContext): string | null {
+function findUniqueAttribute(element: XMLElement, ctx: LocatorContext): string | null {
   const attrs = ctx.isAndroid
     ? ['resource-id', 'content-desc', 'text']
     : ['name', 'label', 'value'];
@@ -149,13 +150,13 @@ function findUniqueAttribute(element: Element, ctx: LocatorContext): string | nu
  */
 function buildHierarchicalXPath(
   ctx: LocatorContext,
-  element: Element,
+  element: XMLElement,
   maxDepth: number = 3,
 ): string | null {
   if (!ctx.parsedDOM) return null;
 
   const pathParts: string[] = [];
-  let current: Element | null = element;
+  let current: XMLElement | null = element;
   let depth = 0;
 
   while (current && depth < maxDepth) {
@@ -176,7 +177,7 @@ function buildHierarchicalXPath(
       }
     }
 
-    const parent = current.parentNode as Element | null;
+    const parent = current.parentNode as XMLElement | null;
     current = parent && parent.nodeType === 1 ? parent : null;
     depth++;
   }
@@ -202,7 +203,7 @@ function addXPathLocator(
   results: [LocatorStrategy, string][],
   xpath: string,
   ctx: LocatorContext,
-  targetNode?: Node,
+  targetNode?: XMLNode,
 ): void {
   const uniqueness = checkUniqueness(ctx, xpath, targetNode);
   if (uniqueness.isUnique) {
@@ -211,7 +212,8 @@ function addXPathLocator(
     results.push(['xpath', generateIndexedXPath(xpath, uniqueness.index)]);
   } else {
     if (targetNode && ctx.parsedDOM) {
-      const hierarchical = buildHierarchicalXPath(ctx, targetNode as Element);
+      // @xmldom/xmldom 0.9+ XMLNode doesn't satisfy global Node; safe at runtime
+      const hierarchical = buildHierarchicalXPath(ctx, targetNode as unknown as XMLElement);
       if (hierarchical) {
         results.push(['xpath', hierarchical]);
       }
@@ -223,7 +225,7 @@ function addXPathLocator(
 /**
  * Check if element is within UiAutomator scope
  */
-function isInUiAutomatorScope(element: JSONElement, doc: Document | null): boolean {
+function isInUiAutomatorScope(element: JSONElement, doc: XMLDocument | null): boolean {
   if (!doc) return true;
 
   const hierarchyNodes = evaluateXPath(doc, '/hierarchy/*');
@@ -354,7 +356,7 @@ function getSimpleSuggestedLocators(
   element: JSONElement,
   ctx: LocatorContext,
   automationName: string,
-  targetNode?: Node,
+  targetNode?: XMLNode,
 ): [LocatorStrategy, string][] {
   const results: [LocatorStrategy, string][] = [];
   const isAndroid = automationName.toLowerCase().includes('uiautomator');
@@ -445,7 +447,7 @@ function getComplexSuggestedLocators(
   element: JSONElement,
   ctx: LocatorContext,
   automationName: string,
-  targetNode?: Node,
+  targetNode?: XMLNode,
 ): [LocatorStrategy, string][] {
   const results: [LocatorStrategy, string][] = [];
   const isAndroid = automationName.toLowerCase().includes('uiautomator');
@@ -503,7 +505,7 @@ export function getSuggestedLocators(
   sourceXML: string,
   automationName: string,
   ctx?: LocatorContext,
-  targetNode?: Node,
+  targetNode?: XMLNode,
 ): [LocatorStrategy, string][] {
   const locatorCtx = ctx ?? {
     sourceXML,

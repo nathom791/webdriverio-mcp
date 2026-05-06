@@ -64,6 +64,7 @@ import type {
   LocatorStrategy,
   ElementWithLocators,
   GenerateLocatorsOptions,
+  XMLDocument,
 } from './types';
 
 import { xmlToJSON, xmlToDOM, parseAndroidBounds, parseIOSBounds, findDOMNodeByPath } from './xml-parsing';
@@ -78,7 +79,7 @@ interface ProcessingContext {
   viewportSize: { width: number; height: number };
   filters: FilterOptions;
   results: ElementWithLocators[];
-  parsedDOM: Document | null;
+  parsedDOM: XMLDocument | null;
 }
 
 /**
