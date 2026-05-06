@@ -1,5 +1,7 @@
 # Changelog
 
+## [3.4.2](https://github.com/webdriverio/mcp/compare/v3.4.1...v3.4.2) (2026-05-06)
+
 ## [3.4.1](https://github.com/webdriverio/mcp/compare/v3.4.0...v3.4.1) (2026-04-30)
 
 ### Refactoring
