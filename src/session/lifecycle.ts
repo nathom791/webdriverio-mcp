@@ -1,8 +1,13 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { SessionHistory } from '../types/recording';
 import type { SessionResult } from '../providers/types';
 import type { SessionMetadata } from './state';
 import { getState } from './state';
 import { getProvider } from '../providers/registry';
+import { endTrace } from '../trace/recorder.js';
+import { getTraceSession } from '../trace/state.js';
+import { buildTraceZip } from '../trace/zip-writer.js';
 
 function getSessionResult(history: SessionHistory | undefined): SessionResult {
   const errorStep = history?.steps.find(s => s.status === 'error');
@@ -79,6 +84,24 @@ export async function closeSession(sessionId: string, detach: boolean, isAttache
   }
 
   const metadata = state.sessionMetadata.get(sessionId);
+
+  if (metadata?.trace) {
+    endTrace(sessionId);
+    const traceSession = getTraceSession(sessionId);
+    if (traceSession) {
+      try {
+        const traceDir = join(process.cwd(), '.trace');
+        mkdirSync(traceDir, { recursive: true });
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const outPath = join(traceDir, `${timestamp}-${sessionId.slice(0, 8)}.zip`);
+        const zipBuffer = await buildTraceZip(traceSession);
+        writeFileSync(outPath, zipBuffer);
+        console.error(`[TRACE] Saved to ${outPath}`);
+      } catch (e) {
+        console.error('[TRACE] Failed to save trace:', e);
+      }
+    }
+  }
 
   // Terminate the WebDriver session if:
   // - force is true (override), OR
