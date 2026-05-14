@@ -6,7 +6,6 @@ describe('mapToolToTraceAction', () => {
     expect(mapToolToTraceAction('navigate')).toEqual({
       class: 'Page',
       method: 'navigate',
-      traceMethod: 'trace:page.navigate',
     });
   });
 
@@ -14,7 +13,6 @@ describe('mapToolToTraceAction', () => {
     expect(mapToolToTraceAction('click_element')).toEqual({
       class: 'Element',
       method: 'click',
-      traceMethod: 'trace:element.click',
     });
   });
 
@@ -40,19 +38,19 @@ describe('mapToolToTraceAction', () => {
 
 describe('formatActionTitle', () => {
   it('includes first param in title', () => {
-    const action = { class: 'Page', method: 'navigate', traceMethod: 'trace:page.navigate' };
+    const action = { class: 'Page', method: 'navigate' };
     expect(formatActionTitle(action, { url: 'https://example.com' })).toBe('Page.navigate("https://example.com")');
   });
 
   it('truncates long params to 80 chars', () => {
-    const action = { class: 'Page', method: 'evaluate', traceMethod: 'trace:page.evaluate' };
+    const action = { class: 'Page', method: 'evaluate' };
     const longScript = 'a'.repeat(100);
     const title = formatActionTitle(action, { script: longScript });
     expect(title.length).toBeLessThan(100);
   });
 
   it('omits parens content when no params', () => {
-    const action = { class: 'Browser', method: 'launch', traceMethod: 'trace:browser.launch' };
+    const action = { class: 'Browser', method: 'launch' };
     expect(formatActionTitle(action, {})).toBe('Browser.launch()');
   });
 });
