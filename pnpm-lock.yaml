@@ -24,7 +24,7 @@ importers:
         version: 1.29.0(zod@4.4.3)
       '@toon-format/toon':
         specifier: ^2.1.0
-        version: 2.1.0
+        version: 2.2.0
       '@wdio/protocols':
         specifier: ^9.27.0
         version: 9.27.0
@@ -1189,8 +1189,8 @@ packages:
     peerDependencies:
       eslint: ^9.0.0 || ^10.0.0
 
-  '@toon-format/toon@2.1.0':
-    resolution: {integrity: sha512-JwWptdF5eOA0HaQxbKAzkpQtR4wSWTEfDlEy/y3/4okmOAX1qwnpLZMmtEWr+ncAhTTY1raCKH0kteHhSXnQqg==}
+  '@toon-format/toon@2.2.0':
+    resolution: {integrity: sha512-FMYqrlZnMN72YIT9KVt7Kxc41gat+RgMIzDmvRRPHw0J7pqW/FeBGDY/4BIWjT71Y+EdI9fCJip90uXuGuYhjw==}
 
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
@@ -4615,7 +4615,7 @@ snapshots:
       estraverse: 5.3.0
       picomatch: 4.0.4
 
-  '@toon-format/toon@2.1.0': {}
+  '@toon-format/toon@2.2.0': {}
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
