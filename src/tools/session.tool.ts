@@ -46,7 +46,7 @@ export const startSessionToolDefinition: ToolDefinition = {
     noReset: coerceBoolean.optional().describe('Preserve app data between sessions'),
     fullReset: coerceBoolean.optional().describe('Uninstall app before/after session'),
     newCommandTimeout: z.number().min(0).optional().default(300).describe('Appium command timeout in seconds'),
-    trace: coerceBoolean.optional().default(false).describe('Enable trace recording — produces a Playwright-compatible zip playable at player.vibium.dev. Call export_trace to save the zip after the session.'),
+    trace: coerceBoolean.optional().default(false).describe('Enable trace recording — produces a Playwright-compatible zip saved to .trace/ on close_session, playable at player.vibium.dev.'),
     attach: coerceBoolean.optional().default(false).describe('Attach to existing Chrome instead of launching'),
     attachConfig: z.object({
       port: z.number().optional().default(9222),
@@ -217,7 +217,7 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
   });
 
   if (args.trace) {
-    startTrace(sessionId, mergedCapabilities, 'browser');
+    startTrace(sessionId, mergedCapabilities, 'browser', { width: windowWidth, height: windowHeight });
   }
 
   let sizeNote = '';
@@ -352,7 +352,7 @@ async function attachBrowserSession(args: StartSessionArgs): Promise<CallToolRes
   });
 
   if (args.trace) {
-    startTrace(sessionId, capabilities, 'browser');
+    startTrace(sessionId, capabilities, 'browser', { width: 1920, height: 1080 });
   }
 
   if (navigationUrl) {

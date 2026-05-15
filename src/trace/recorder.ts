@@ -5,14 +5,14 @@ import { createTraceSession, getMonotonicMs, getTraceSession } from './state.js'
 import { formatActionTitle, mapToolToTraceAction } from './tool-mapping.js';
 import type { TraceSession } from './types.js';
 
-export function startTrace(sessionId: string, capabilities: Record<string, unknown>, sessionType: 'browser' | 'ios' | 'android' = 'browser'): void {
+export function startTrace(sessionId: string, capabilities: Record<string, unknown>, sessionType: 'browser' | 'ios' | 'android' = 'browser', browserViewport?: { width: number; height: number }): void {
   let browserName: string;
   let viewport: { width: number; height: number };
   let title: string;
 
   if (sessionType === 'browser') {
     browserName = String(capabilities.browserName ?? 'chromium');
-    viewport = { width: 1280, height: 720 };
+    viewport = browserViewport ?? { width: 1920, height: 1080 };
     title = String(capabilities.browserName ?? browserName);
   } else {
     // Vibium player is Playwright-derived and expects a known browserName; use 'chromium' as safe fallback
@@ -139,17 +139,17 @@ export function withTrace(toolName: string, callback: ToolCallback): ToolCallbac
 }
 
 // Captures a final screenshot at session end (shows the last screen state).
-export function captureTraceScreenshot(sessionId: string): void {
+export function captureTraceScreenshot(sessionId: string, browser?: WebdriverIO.Browser): void {
   const traceSession = getTraceSession(sessionId);
   if (!traceSession) return;
-  const p = captureScreenshot(traceSession);
+  const p = captureScreenshot(traceSession, browser);
   traceSession.screenshotChain = traceSession.screenshotChain.then(() => p);
 }
 
-async function captureScreenshot(traceSession: TraceSession): Promise<void> {
+async function captureScreenshot(traceSession: TraceSession, browser?: WebdriverIO.Browser): Promise<void> {
   try {
-    const browser = getBrowser();
-    const base64 = await browser.takeScreenshot();
+    const b = browser ?? getBrowser();
+    const base64 = await b.takeScreenshot();
     const inputBuffer = Buffer.from(base64, 'base64');
     const image = sharp(inputBuffer);
     const metadata = await image.metadata();
