@@ -12,7 +12,6 @@ const TOOL_MAP: Record<string, TraceAction> = {
   swipe: { class: 'Page', method: 'swipe' },
   drag_and_drop: { class: 'Element', method: 'dragTo' },
   execute_script: { class: 'Page', method: 'evaluate' },
-  start_session: { class: 'Browser', method: 'newContext' },
   launch_chrome: { class: 'Browser', method: 'launch' },
 };
 

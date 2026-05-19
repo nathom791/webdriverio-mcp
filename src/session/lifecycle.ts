@@ -5,11 +5,11 @@ import type { SessionResult } from '../providers/types';
 import type { SessionMetadata } from './state';
 import { getState } from './state';
 import { getProvider } from '../providers/registry';
-import { endTrace, captureTraceScreenshot } from '../trace/recorder.js';
-import { getTraceSession, deleteTraceSession } from '../trace/state.js';
+import { captureTraceScreenshot, endTrace } from '../trace/recorder.js';
+import { deleteTraceSession, getTraceSession } from '../trace/state.js';
 import { buildTraceZip } from '../trace/zip-writer.js';
 
-async function finalizeTrace(sessionId: string, browser?: WebdriverIO.Browser): Promise<void> {
+async function finalizeTrace(sessionId: string, browser: WebdriverIO.Browser): Promise<void> {
   endTrace(sessionId);
   captureTraceScreenshot(sessionId, browser);
   const traceSession = getTraceSession(sessionId);
@@ -110,7 +110,7 @@ export async function closeSession(sessionId: string, detach: boolean, isAttache
   const metadata = state.sessionMetadata.get(sessionId);
 
   if (metadata?.trace) {
-    await finalizeTrace(sessionId);
+    await finalizeTrace(sessionId, browser);
   }
 
   // Terminate the WebDriver session if:
