@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.5.0](https://github.com/webdriverio/mcp/compare/v3.4.4...v3.5.0) (2026-05-19)
+
+### Features
+
+* **trace:** Add support for mobile trace recording ([1cbec6a](https://github.com/webdriverio/mcp/commit/1cbec6aa0029420f48db8e5e29ddc50f8b4431a4))
+* **trace:** Vibium-compatible trace recording for browser sessions ([e6d0509](https://github.com/webdriverio/mcp/commit/e6d05099d75a387a8a3de3313c193e7848dd93f2))
+
+### Bug Fixes
+
+* **trace:** Ensure `finalizeTrace` handles browser argument ([10c0b25](https://github.com/webdriverio/mcp/commit/10c0b255657eb0981e4dcf1a5165eff758bebb97))
+* **trace:** Manage trace sessions' lifecycle correctly ([2ad506f](https://github.com/webdriverio/mcp/commit/2ad506f21f3f6a38c7f9ec2922700e9e31aa160e))
+
+### Refactoring
+
+* **trace:** Remove `traceMethod` from tool mapping and related functionality ([a19c8a3](https://github.com/webdriverio/mcp/commit/a19c8a3b96d5366ebb833c290b5adaf050f88316))
+
 ## [3.4.4](https://github.com/webdriverio/mcp/compare/v3.4.3...v3.4.4) (2026-05-06)
 
 ## [3.4.3](https://github.com/webdriverio/mcp/compare/v3.4.2...v3.4.3) (2026-05-06)
