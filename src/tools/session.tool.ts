@@ -19,18 +19,18 @@ export const startSessionToolDefinition: ToolDefinition = {
   description: 'Starts a browser or mobile automation session. Only one active session at a time — starting a new one closes the existing session first. Use platform "browser" with a browser name, or "ios"/"android" with deviceName. Set attach: true to connect to a running Chrome via CDP instead of launching a new browser.',
   annotations: { title: 'Start Session', destructiveHint: false },
   inputSchema: {
-    provider: z.enum(['local', 'browserstack']).optional().default('local').describe('Session provider (default: local)'),
+    provider: z.enum(['local', 'browserstack', 'saucelabs']).optional().default('local').describe('Session provider (default: local)'),
     platform: platformEnum.describe('Session platform type'),
     browser: browserEnum.optional().describe('Browser to launch (required for browser platform)'),
-    browserVersion: z.string().optional().describe('Browser version (BrowserStack only, default: latest)'),
-    os: z.string().optional().describe('Operating system (BrowserStack browser only, e.g. "Windows", "OS X")'),
-    osVersion: z.string().optional().describe('OS version (BrowserStack browser only, e.g. "11", "Sequoia")'),
-    app: z.string().optional().describe('BrowserStack app URL (bs://...) or custom_id for mobile sessions'),
+    browserVersion: z.string().optional().describe('Browser version (cloud providers only, default: latest)'),
+    os: z.string().optional().describe('Operating system (cloud providers only, e.g. "Windows", "OS X")'),
+    osVersion: z.string().optional().describe('OS version (cloud providers only, e.g. "11", "Sequoia")'),
+    app: z.string().optional().describe('App URL (bs://...) for BrowserStack or storage:filename= for Sauce Labs mobile sessions'),
     reporting: z.object({
       project: z.string().optional(),
       build: z.string().optional(),
       session: z.string().optional(),
-    }).optional().describe('BrowserStack reporting labels (project, build, session)'),
+    }).optional().describe('Cloud provider reporting labels (project, build, session)'),
     headless: coerceBoolean.optional().default(true).describe('Run browser in headless mode (default: true)'),
     windowWidth: z.number().min(400).max(3840).optional().default(1920).describe('Browser window width'),
     windowHeight: z.number().min(400).max(2160).optional().default(1080).describe('Browser window height'),
@@ -58,14 +58,18 @@ export const startSessionToolDefinition: ToolDefinition = {
       path: z.string().optional(),
       protocol: z.string().optional(),
     }).optional().describe('Appium server connection (local provider only)'),
-    browserstackLocal: z.union([coerceBoolean, z.literal('external')]).optional().default(false).describe('Enable BrowserStack Local tunnel routing (BrowserStack only, default: false). true = auto-start tunnel before session and stop on close. "external" = tunnel already running externally, set local: true in capabilities only.'),
+    region: z.enum(['us-west-1', 'eu-central-1', 'apac-southeast-1']).optional().default('eu-central-1').describe('Sauce Labs region (default: eu-central-1). Only used with provider: "saucelabs".'),
+    tunnel: z.union([z.literal('external'), coerceBoolean]).optional().default(false).describe('Enable local tunnel routing (cloud providers only, default: false). true = auto-start tunnel before session and stop on close. "external" = tunnel already running externally.'),
+    tunnelName: z.string().optional().describe('Tunnel identifier name. With tunnel: "external" this must match the running tunnel. With tunnel: true a unique name is auto-generated if not provided.'),
+    browserstackLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable BrowserStack Local tunnel routing.'),
+    saucelabsLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable Sauce Connect tunnel routing.'),
     navigationUrl: z.string().optional().describe('URL to navigate to after starting'),
     capabilities: z.record(z.string(), z.unknown()).optional().describe('Additional capabilities to merge'),
   },
 };
 
 type StartSessionArgs = {
-  provider?: 'local' | 'browserstack';
+  provider?: 'local' | 'browserstack' | 'saucelabs';
   platform: 'browser' | 'ios' | 'android';
   browser?: 'chrome' | 'firefox' | 'edge' | 'safari';
   browserVersion?: string;
@@ -92,7 +96,11 @@ type StartSessionArgs = {
   attach?: boolean;
   attachConfig?: { port?: number; host?: string };
   appiumConfig?: { host?: string; port?: number; path?: string; protocol?: string };
+  region?: 'us-west-1' | 'eu-central-1' | 'apac-southeast-1';
+  tunnel?: boolean | 'external';
+  tunnelName?: string;
   browserstackLocal?: boolean | 'external';
+  saucelabsLocal?: boolean | 'external';
   navigationUrl?: string;
   capabilities?: Record<string, unknown>;
 };
@@ -183,6 +191,13 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
 
   const provider = getProvider(args.provider ?? 'local', 'browser');
   const connectionConfig = provider.getConnectionConfig(args as Record<string, unknown>);
+
+  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
+  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
+  const tunnelEnabled = effectiveTunnel === true;
+  const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
+
   const mergedCapabilities = provider.buildCapabilities({
     ...args as Record<string, unknown>,
     browser,
@@ -190,10 +205,11 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
     windowWidth,
     windowHeight,
     capabilities: userCapabilities,
+    tunnelName,
   });
 
-  const tunnelHandle = args.browserstackLocal === true
-    ? await provider.startTunnel?.(args as Record<string, unknown>)
+  const tunnelHandle = tunnelEnabled
+    ? await provider.startTunnel?.({ ...args as Record<string, unknown>, tunnelName })
     : undefined;
 
   const wdioBrowser = await remote({ ...connectionConfig, capabilities: mergedCapabilities });
@@ -204,6 +220,8 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
     capabilities: mergedCapabilities,
     isAttached: false,
     provider: args.provider ?? 'local',
+    region: args.region,
+    tunnelName,
     tunnelHandle,
     trace: args.trace ?? false,
   };
@@ -262,10 +280,17 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
 
   const provider = getProvider(args.provider ?? 'local', args.platform);
   const serverConfig = provider.getConnectionConfig(args as Record<string, unknown>);
-  const mergedCapabilities = provider.buildCapabilities(args as Record<string, unknown>);
 
-  const tunnelHandle = args.browserstackLocal === true
-    ? await provider.startTunnel?.(args as Record<string, unknown>)
+  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
+  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
+  const tunnelEnabled = effectiveTunnel === true;
+  const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
+
+  const mergedCapabilities = provider.buildCapabilities({ ...args as Record<string, unknown>, tunnelName });
+
+  const tunnelHandle = tunnelEnabled
+    ? await provider.startTunnel?.({ ...args as Record<string, unknown>, tunnelName })
     : undefined;
 
   const browser = await remote({ ...serverConfig, capabilities: mergedCapabilities });
@@ -279,6 +304,8 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
     capabilities: mergedCapabilities,
     isAttached: shouldAutoDetach,
     provider: args.provider ?? 'local',
+    region: args.region,
+    tunnelName,
     tunnelHandle,
     trace: args.trace ?? false,
   };
