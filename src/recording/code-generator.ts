@@ -144,7 +144,7 @@ export function generateCode(history: SessionHistory): string {
   const sauceOptions = history.capabilities['sauce:options'] as Record<string, unknown> | undefined;
   const isBrowserStack = bstackOptions !== undefined;
   const isSauceLabs = sauceOptions !== undefined;
-  const usesLocalTunnel = isBrowserStack ? bstackOptions?.local === true : (sauceOptions?.tunnel === true);
+  const usesLocalTunnel = isBrowserStack ? bstackOptions?.local === true : (sauceOptions?.tunnelName !== undefined);
 
   const steps = history.steps
     .map(step => generateStep(step, history))
@@ -222,20 +222,20 @@ export function generateCode(history: SessionHistory): string {
     if (usesLocalTunnel) {
       const tunnelSetup = [
         '',
-        "import sauceConnectLauncher from 'sauce-connect-launcher';",
+        "import SauceLabs from 'saucelabs';",
         '',
-        'const startTunnel = promisify(sauceConnectLauncher);',
-        'const sc = await startTunnel({',
-        '  username: process.env.SAUCE_USERNAME,',
-        '  accessKey: process.env.SAUCE_ACCESS_KEY,',
+        'const sl = new SauceLabs({',
+        '  user: process.env.SAUCE_USERNAME,',
+        '  key: process.env.SAUCE_ACCESS_KEY,',
+        `  region: '${slRegion}',`,
         '});',
-        'const stopTunnel = promisify(sc.close.bind(sc));',
+        "const sc = await sl.startSauceConnect({ tunnelName: 'wdio-mcp-tunnel' });",
+        'const stopTunnel = () => sc.close();',
         '',
       ].join('\n');
 
       return [
         "import { remote } from 'webdriverio';",
-        "import { promisify } from 'node:util';",
         tunnelSetup,
         preamble,
         'try {',

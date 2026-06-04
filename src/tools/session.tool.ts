@@ -191,6 +191,13 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
 
   const provider = getProvider(args.provider ?? 'local', 'browser');
   const connectionConfig = provider.getConnectionConfig(args as Record<string, unknown>);
+
+  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
+  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
+  const tunnelEnabled = effectiveTunnel === true;
+  const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
+
   const mergedCapabilities = provider.buildCapabilities({
     ...args as Record<string, unknown>,
     browser,
@@ -198,12 +205,9 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
     windowWidth,
     windowHeight,
     capabilities: userCapabilities,
+    tunnelName,
   });
 
-  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
-  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
-  const tunnelEnabled = effectiveTunnel === true;
-  const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
   const tunnelHandle = tunnelEnabled
     ? await provider.startTunnel?.({ ...args as Record<string, unknown>, tunnelName })
     : undefined;
@@ -276,12 +280,15 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
 
   const provider = getProvider(args.provider ?? 'local', args.platform);
   const serverConfig = provider.getConnectionConfig(args as Record<string, unknown>);
-  const mergedCapabilities = provider.buildCapabilities(args as Record<string, unknown>);
 
   // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
   const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
   const tunnelEnabled = effectiveTunnel === true;
   const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
+
+  const mergedCapabilities = provider.buildCapabilities({ ...args as Record<string, unknown>, tunnelName });
+
   const tunnelHandle = tunnelEnabled
     ? await provider.startTunnel?.({ ...args as Record<string, unknown>, tunnelName })
     : undefined;

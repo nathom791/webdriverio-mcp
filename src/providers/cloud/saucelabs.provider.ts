@@ -1,14 +1,17 @@
 import { basicAuth } from '../../utils/auth';
 import type { ConnectionConfig, SessionProvider, SessionResult } from '../types';
 import type { Browser as WdioBrowser } from 'webdriverio';
+import type { SauceLabsOptions } from 'saucelabs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+type SauceLabsRegion = 'us' | 'eu' | 'us-west-1' | 'us-east-4' | 'eu-central-1' | 'staging';
 
 export class SauceLabsProvider implements SessionProvider {
   name = 'saucelabs';
 
-  private resolveRegion(options: Record<string, unknown>): string {
-    return (options.region as string | undefined) ?? 'eu-central-1';
+  private resolveRegion(options: Record<string, unknown>): SauceLabsRegion {
+    return (options.region as SauceLabsRegion | 'staging' | undefined) ?? 'eu-central-1';
   }
 
   getConnectionConfig(options: Record<string, unknown>): ConnectionConfig {
@@ -63,7 +66,7 @@ export class SauceLabsProvider implements SessionProvider {
         browserName: mobileBrowser,
         'appium:deviceName': options.deviceName,
         'appium:platformVersion': options.platformVersion,
-        'appium:automationName': (options.automationName as string | undefined) ?? 'UiAutomator2',
+        'appium:automationName': (options.automationName as string | undefined) ?? (platform === 'ios' ? 'XCUITest' : 'UiAutomator2'),
         'appium:newCommandTimeout': (options.newCommandTimeout as number | undefined) ?? 300,
         'sauce:options': sauceOptions,
       };
@@ -81,7 +84,7 @@ export class SauceLabsProvider implements SessionProvider {
       'appium:app': options.app,
       'appium:deviceName': options.deviceName,
       'appium:platformVersion': options.platformVersion,
-      'appium:automationName': (options.automationName as string | undefined) ?? 'UiAutomator2',
+      'appium:automationName': (options.automationName as string | undefined) ?? (platform === 'ios' ? 'XCUITest' : 'UiAutomator2'),
       'appium:autoGrantPermissions': (options.autoGrantPermissions as boolean | undefined) ?? true,
       'appium:autoAcceptAlerts': autoDismissAlerts ? undefined : (autoAcceptAlerts ?? true),
       'appium:autoDismissAlerts': autoDismissAlerts,
@@ -108,11 +111,7 @@ export class SauceLabsProvider implements SessionProvider {
     console.error(`[SauceLabs] Starting tunnel "${tunnelName}" (region: ${region})`);
     try {
       const { default: SauceLabs } = await import('saucelabs');
-      const api = new SauceLabs({
-        user: process.env.SAUCE_USERNAME ?? '',
-        key: process.env.SAUCE_ACCESS_KEY ?? '',
-        region: region as 'eu-central-1' | 'us-west-1' | 'us-east-4',
-      });
+      const api = new SauceLabs({ user: process.env.SAUCE_USERNAME ?? '', key: process.env.SAUCE_ACCESS_KEY ?? '', region } satisfies SauceLabsOptions);
       return api.startSauceConnect({
         tunnelName,
         logFile,

@@ -40,7 +40,7 @@ function getLocalBinaryInfo(): {
 export const saucelabsLocalBinaryResource: ResourceDefinition = {
   name: 'saucelabs-local-binary',
   uri: 'wdio://saucelabs/local-binary',
-  description: 'Sauce Connect Proxy binary download URL and daemon setup instructions for the current platform. MUST be read and followed before using saucelabsLocal: true in start_session.',
+  description: 'Sauce Connect Proxy binary download URL and daemon setup instructions for the current platform. Only needed for tunnel: \'external\' — when tunnel: true the SDK auto-manages Sauce Connect for you.',
   handler: async () => {
     const info = getLocalBinaryInfo();
     const username = process.env.SAUCE_USERNAME ?? '<SAUCE_USERNAME>';
@@ -48,7 +48,7 @@ export const saucelabsLocalBinaryResource: ResourceDefinition = {
     const region = process.env.SAUCE_REGION ?? 'eu-central-1';
 
     const content = {
-      requirement: 'MUST start the Sauce Connect Proxy daemon BEFORE calling start_session with saucelabsLocal: true. Without it, all navigation to local/internal URLs will fail.',
+      requirement: 'ONLY needed for tunnel: \'external\'. Use tunnel: true instead — the SDK starts and stops Sauce Connect automatically. With tunnel: \'external\', you MUST start the daemon manually BEFORE calling start_session, and set tunnelName to match the running tunnel.',
       platform: info.platform,
       arch: info.arch,
       downloadUrl: info.downloadUrl,
@@ -64,7 +64,7 @@ export const saucelabsLocalBinaryResource: ResourceDefinition = {
         stop: `./${info.binaryName} --stop`,
         status: `./${info.binaryName} --status`,
       },
-      afterDaemonIsRunning: 'Call start_session with saucelabsLocal: true to route Sauce Labs traffic through the tunnel.',
+      afterDaemonIsRunning: 'Call start_session with tunnel: \'external\' and tunnelName matching this daemon to route traffic through it.',
     };
 
     return {
