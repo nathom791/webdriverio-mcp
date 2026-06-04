@@ -69,7 +69,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderApiConfig> = {
   },
   saucelabs: {
     name: 'Sauce Labs',
-    apiBase: 'https://api.eu-central-1.saucelabs.com',
+    apiBase: 'https://api.eu-central-1.saucelabs.com', // region overridden via param
     credsEnvNames: ['SAUCE_USERNAME', 'SAUCE_ACCESS_KEY'],
     listPath: '/v1/storage/files',
     supportsOrgWide: false,
@@ -92,16 +92,20 @@ const PROVIDER_CONFIGS: Record<string, ProviderApiConfig> = {
   },
 };
 
-function getProviderConfig(provider: string): { config: ProviderApiConfig; auth: string } | { error: string } {
-  const config = PROVIDER_CONFIGS[provider];
-  if (!config) return { error: `Unknown provider: ${provider}` };
-  const [userEnv, keyEnv] = config.credsEnvNames;
+function getProviderConfig(provider: string, region?: string): { config: ProviderApiConfig; auth: string } | { error: string } {
+  const base = PROVIDER_CONFIGS[provider];
+  if (!base) return { error: `Unknown provider: ${provider}` };
+  const [userEnv, keyEnv] = base.credsEnvNames;
   const user = process.env[userEnv];
   const key = process.env[keyEnv];
   if (!user || !key) {
-    const vars = config.credsEnvNames.join(' and ');
+    const vars = base.credsEnvNames.join(' and ');
     return { error: `Missing credentials: set ${vars} environment variables.` };
   }
+  // Apply region to Sauce Labs API base
+  const config = provider === 'saucelabs'
+    ? { ...base, apiBase: `https://api.${region ?? 'eu-central-1'}.saucelabs.com` }
+    : base;
   return { config, auth: basicAuth(user, key) };
 }
 
@@ -116,6 +120,7 @@ export const listAppsToolDefinition: ToolDefinition = {
     sortBy: z.enum(['app_name', 'uploaded_at']).optional().default('uploaded_at').describe('Sort order for results'),
     organizationWide: coerceBoolean.optional().default(false).describe('(BrowserStack only) List apps uploaded by all users in the organization. Defaults to false (own uploads only).'),
     limit: z.number().int().min(1).optional().default(20).describe('Maximum number of apps to return (only applies when organizationWide is true, default 20)'),
+    region: z.enum(['us-west-1', 'eu-central-1', 'apac-southeast-1']).optional().default('eu-central-1').describe('Sauce Labs region (default: eu-central-1)'),
   },
 };
 
@@ -124,11 +129,12 @@ type ListAppsArgs = {
   sortBy?: 'app_name' | 'uploaded_at';
   organizationWide?: boolean;
   limit?: number;
+  region?: 'us-west-1' | 'eu-central-1' | 'apac-southeast-1';
 };
 
 export const listAppsTool: ToolCallback = async (args: ListAppsArgs) => {
-  const { provider, sortBy = 'uploaded_at', organizationWide = false, limit = 20 } = args;
-  const resolved = getProviderConfig(provider);
+  const { provider, sortBy = 'uploaded_at', organizationWide = false, limit = 20, region = 'eu-central-1' } = args;
+  const resolved = getProviderConfig(provider, region);
   if ('error' in resolved) {
     return { isError: true as const, content: [{ type: 'text' as const, text: resolved.error }] };
   }
@@ -170,6 +176,7 @@ export const uploadAppToolDefinition: ToolDefinition = {
     provider: z.enum(['browserstack', 'saucelabs']).describe('Cloud provider'),
     path: z.string().describe('Absolute path to the .apk or .ipa file'),
     customId: z.string().optional().describe('Optional custom ID for the app (used to reference it later)'),
+    region: z.enum(['us-west-1', 'eu-central-1', 'apac-southeast-1']).optional().default('eu-central-1').describe('Sauce Labs region (default: eu-central-1)'),
   },
 };
 
@@ -177,11 +184,12 @@ type UploadAppArgs = {
   provider: 'browserstack' | 'saucelabs';
   path: string;
   customId?: string;
+  region?: 'us-west-1' | 'eu-central-1' | 'apac-southeast-1';
 };
 
 export const uploadAppTool: ToolCallback = async (args: UploadAppArgs) => {
-  const { provider, path, customId } = args;
-  const resolved = getProviderConfig(provider);
+  const { provider, path, customId, region = 'eu-central-1' } = args;
+  const resolved = getProviderConfig(provider, region);
   if ('error' in resolved) {
     return { isError: true as const, content: [{ type: 'text' as const, text: resolved.error }] };
   }

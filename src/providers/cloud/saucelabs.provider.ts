@@ -1,9 +1,8 @@
-import { promisify } from 'node:util';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { basicAuth } from '../../utils/auth';
 import type { ConnectionConfig, SessionProvider, SessionResult } from '../types';
 import type { Browser as WdioBrowser } from 'webdriverio';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export class SauceLabsProvider implements SessionProvider {
   name = 'saucelabs';
@@ -38,10 +37,7 @@ export class SauceLabsProvider implements SessionProvider {
     else if (reporting?.project) sauceOptions.name = reporting.project;
 
     if (saucelabsLocal) {
-      sauceOptions.tunnel = true;
-      if (saucelabsLocal === 'external') {
-        sauceOptions.tunnelIdentifier = process.env.SAUCE_TUNNEL_ID ?? 'mcp-tunnel';
-      }
+      sauceOptions.tunnelName = options.tunnelName;
     }
 
     if (platform === 'browser') {
@@ -107,18 +103,21 @@ export class SauceLabsProvider implements SessionProvider {
 
   async startTunnel(options: Record<string, unknown>): Promise<unknown> {
     const region = this.resolveRegion(options);
+    const tunnelName = (options.tunnelName as string | undefined) ?? `wdio-mcp-${Date.now()}`;
     const logFile = join(tmpdir(), 'sauce-connect.log');
-    console.error(`[SauceLabs] Starting tunnel, log: ${logFile}`);
+    console.error(`[SauceLabs] Starting tunnel "${tunnelName}" (region: ${region})`);
     try {
-      process.env.SAUCE_API_HOST = `api.${region}.saucelabs.com`;
-      const { default: sauceConnectLauncher } = await import('sauce-connect-launcher');
-      const start = promisify(sauceConnectLauncher);
-      const sc = await start({
-        logfile: logFile,
-        verbose: true,
+      const { default: SauceLabs } = await import('saucelabs');
+      const api = new SauceLabs({
+        user: process.env.SAUCE_USERNAME ?? '',
+        key: process.env.SAUCE_ACCESS_KEY ?? '',
+        region: region as 'eu-central-1' | 'us-west-1' | 'us-east-4',
+      });
+      return api.startSauceConnect({
+        tunnelName,
+        logFile,
         logger: (msg: string) => console.error(`[SauceConnect] ${msg}`),
       });
-      return sc;
     } catch (e: unknown) {
       const msg = (e !== null && typeof e === 'object' ? (e as { message?: string }).message : undefined) ?? String(e);
       if (msg.includes('already running') || msg.includes('another instance')) {
@@ -163,9 +162,8 @@ export class SauceLabsProvider implements SessionProvider {
 
   async stopTunnel(tunnelHandle?: unknown): Promise<void> {
     if (tunnelHandle) {
-      const sc = tunnelHandle as { close: (cb: (err?: Error) => void) => void };
-      const stop = promisify(sc.close.bind(sc));
-      await stop();
+      const sc = tunnelHandle as { close: () => Promise<undefined> };
+      await sc.close();
     }
   }
 }

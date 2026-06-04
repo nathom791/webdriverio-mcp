@@ -60,6 +60,7 @@ export const startSessionToolDefinition: ToolDefinition = {
     }).optional().describe('Appium server connection (local provider only)'),
     region: z.enum(['us-west-1', 'eu-central-1', 'apac-southeast-1']).optional().default('eu-central-1').describe('Sauce Labs region (default: eu-central-1). Only used with provider: "saucelabs".'),
     tunnel: z.union([z.literal('external'), coerceBoolean]).optional().default(false).describe('Enable local tunnel routing (cloud providers only, default: false). true = auto-start tunnel before session and stop on close. "external" = tunnel already running externally.'),
+    tunnelName: z.string().optional().describe('Tunnel identifier name. With tunnel: "external" this must match the running tunnel. With tunnel: true a unique name is auto-generated if not provided.'),
     browserstackLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable BrowserStack Local tunnel routing.'),
     saucelabsLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable Sauce Connect tunnel routing.'),
     navigationUrl: z.string().optional().describe('URL to navigate to after starting'),
@@ -97,6 +98,7 @@ type StartSessionArgs = {
   appiumConfig?: { host?: string; port?: number; path?: string; protocol?: string };
   region?: 'us-west-1' | 'eu-central-1' | 'apac-southeast-1';
   tunnel?: boolean | 'external';
+  tunnelName?: string;
   browserstackLocal?: boolean | 'external';
   saucelabsLocal?: boolean | 'external';
   navigationUrl?: string;
@@ -201,8 +203,9 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
   // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
   const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
   const tunnelEnabled = effectiveTunnel === true;
+  const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
   const tunnelHandle = tunnelEnabled
-    ? await provider.startTunnel?.(args as Record<string, unknown>)
+    ? await provider.startTunnel?.({ ...args as Record<string, unknown>, tunnelName })
     : undefined;
 
   const wdioBrowser = await remote({ ...connectionConfig, capabilities: mergedCapabilities });
@@ -214,6 +217,7 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
     isAttached: false,
     provider: args.provider ?? 'local',
     region: args.region,
+    tunnelName,
     tunnelHandle,
     trace: args.trace ?? false,
   };
@@ -277,8 +281,9 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
   // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
   const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
   const tunnelEnabled = effectiveTunnel === true;
+  const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
   const tunnelHandle = tunnelEnabled
-    ? await provider.startTunnel?.(args as Record<string, unknown>)
+    ? await provider.startTunnel?.({ ...args as Record<string, unknown>, tunnelName })
     : undefined;
 
   const browser = await remote({ ...serverConfig, capabilities: mergedCapabilities });
@@ -293,6 +298,7 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
     isAttached: shouldAutoDetach,
     provider: args.provider ?? 'local',
     region: args.region,
+    tunnelName,
     tunnelHandle,
     trace: args.trace ?? false,
   };

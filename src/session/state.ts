@@ -6,6 +6,7 @@ export interface SessionMetadata {
   isAttached: boolean;
   provider?: 'local' | 'browserstack' | 'saucelabs';
   region?: string;
+  tunnelName?: string;
   tunnelHandle?: unknown;
   trace?: boolean;
 }
