@@ -19,13 +19,13 @@ export const startSessionToolDefinition: ToolDefinition = {
   description: 'Starts a browser or mobile automation session. Only one active session at a time — starting a new one closes the existing session first. Use platform "browser" with a browser name, or "ios"/"android" with deviceName. Set attach: true to connect to a running Chrome via CDP instead of launching a new browser.',
   annotations: { title: 'Start Session', destructiveHint: false },
   inputSchema: {
-    provider: z.enum(['local', 'browserstack', 'saucelabs']).optional().default('local').describe('Session provider (default: local)'),
+    provider: z.enum(['local', 'browserstack', 'saucelabs', 'testmu']).optional().default('local').describe('Session provider (default: local)'),
     platform: platformEnum.describe('Session platform type'),
     browser: browserEnum.optional().describe('Browser to launch (required for browser platform)'),
     browserVersion: z.string().optional().describe('Browser version (cloud providers only, default: latest)'),
     os: z.string().optional().describe('Operating system (cloud providers only, e.g. "Windows", "OS X")'),
     osVersion: z.string().optional().describe('OS version (cloud providers only, e.g. "11", "Sequoia")'),
-    app: z.string().optional().describe('App URL (bs://...) for BrowserStack or storage:filename= for Sauce Labs mobile sessions'),
+    app: z.string().optional().describe('App URL (bs://... for BrowserStack, storage:filename= for Sauce Labs, lt://... for TestMu mobile sessions)'),
     reporting: z.object({
       project: z.string().optional(),
       build: z.string().optional(),
@@ -63,13 +63,14 @@ export const startSessionToolDefinition: ToolDefinition = {
     tunnelName: z.string().optional().describe('Tunnel identifier name. With tunnel: "external" this must match the running tunnel. With tunnel: true a unique name is auto-generated if not provided.'),
     browserstackLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable BrowserStack Local tunnel routing.'),
     saucelabsLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable Sauce Connect tunnel routing.'),
+    testmuLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable TestMu Tunnel routing.'),
     navigationUrl: z.string().optional().describe('URL to navigate to after starting'),
     capabilities: z.record(z.string(), z.unknown()).optional().describe('Additional capabilities to merge'),
   },
 };
 
 type StartSessionArgs = {
-  provider?: 'local' | 'browserstack' | 'saucelabs';
+  provider?: 'local' | 'browserstack' | 'saucelabs' | 'testmu';
   platform: 'browser' | 'ios' | 'android';
   browser?: 'chrome' | 'firefox' | 'edge' | 'safari';
   browserVersion?: string;
@@ -101,6 +102,7 @@ type StartSessionArgs = {
   tunnelName?: string;
   browserstackLocal?: boolean | 'external';
   saucelabsLocal?: boolean | 'external';
+  testmuLocal?: boolean | 'external';
   navigationUrl?: string;
   capabilities?: Record<string, unknown>;
 };
@@ -192,9 +194,9 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
   const provider = getProvider(args.provider ?? 'local', 'browser');
   const connectionConfig = provider.getConnectionConfig(args as Record<string, unknown>);
 
-  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal/testmuLocal params
   // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
-  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
+  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? args.testmuLocal ?? false;
   const tunnelEnabled = effectiveTunnel === true;
   const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
 
@@ -281,9 +283,9 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
   const provider = getProvider(args.provider ?? 'local', args.platform);
   const serverConfig = provider.getConnectionConfig(args as Record<string, unknown>);
 
-  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal/testmuLocal params
   // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
-  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
+  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? args.testmuLocal ?? false;
   const tunnelEnabled = effectiveTunnel === true;
   const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
 

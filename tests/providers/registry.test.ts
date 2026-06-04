@@ -3,6 +3,7 @@ import { getProvider } from '../../src/providers/registry';
 import { LocalBrowserProvider } from '../../src/providers/local-browser.provider';
 import { LocalAppiumProvider } from '../../src/providers/local-appium.provider';
 import { BrowserStackProvider } from '../../src/providers/cloud/browserstack.provider';
+import { TestMuProvider } from '../../src/providers/cloud/testmu.provider';
 
 describe('getProvider', () => {
   it('returns LocalBrowserProvider for local browser', () => {
@@ -27,6 +28,18 @@ describe('getProvider', () => {
 
   it('returns BrowserStackProvider for browserstack ios', () => {
     expect(getProvider('browserstack', 'ios')).toBeInstanceOf(BrowserStackProvider);
+  });
+
+  it('returns TestMuProvider for testmu browser', () => {
+    expect(getProvider('testmu', 'browser')).toBeInstanceOf(TestMuProvider);
+  });
+
+  it('returns TestMuProvider for testmu android', () => {
+    expect(getProvider('testmu', 'android')).toBeInstanceOf(TestMuProvider);
+  });
+
+  it('returns TestMuProvider for testmu ios', () => {
+    expect(getProvider('testmu', 'ios')).toBeInstanceOf(TestMuProvider);
   });
 
   it('defaults to local when provider is undefined', () => {

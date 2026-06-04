@@ -4,7 +4,7 @@ export interface SessionMetadata {
   type: 'browser' | 'ios' | 'android';
   capabilities: Record<string, unknown>;
   isAttached: boolean;
-  provider?: 'local' | 'browserstack' | 'saucelabs';
+  provider?: 'local' | 'browserstack' | 'saucelabs' | 'testmu';
   region?: string;
   tunnelName?: string;
   tunnelHandle?: unknown;

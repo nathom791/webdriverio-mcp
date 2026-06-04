@@ -162,6 +162,134 @@ describe('upload_app tool (BrowserStack)', () => {
   });
 });
 
+// ─── LambdaTest/TestMu tests ────────────────────────────────────────────────
+
+describe('list_apps tool (TestMu)', () => {
+  beforeEach(() => {
+    vi.stubEnv('TESTMU_USERNAME', 'testuser');
+    vi.stubEnv('TESTMU_ACCESS_KEY', 'testkey');
+    vi.spyOn(global, 'fetch');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('calls manual-api.lambdatest.com /app/data?type=android endpoint', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => [{ app_name: 'TestApp.apk', app_id: 'lt-app-1', updated_at: '2026-01-01T00:00:00Z' }],
+    } as Response);
+
+    await callList({ provider: 'testmu' });
+
+    const [url, options] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://manual-api.lambdatest.com/app/data?type=android');
+    expect((options?.headers as Record<string, string>)?.Authorization).toMatch(/^Basic /);
+  });
+
+  it('fetches both android and ios platforms', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => [{ app_name: 'TestApp.apk', app_id: 'lt-app-1', updated_at: '2026-01-01T00:00:00Z' }],
+    } as Response);
+
+    await callList({ provider: 'testmu' });
+
+    const urls = vi.mocked(fetch).mock.calls.map(c => c[0] as string);
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toContain('?type=android');
+    expect(urls[1]).toContain('?type=ios');
+  });
+
+  it('returns formatted app list with lt:// format', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => [{ app_name: 'MyApp.apk', app_id: 'lt-app-1', updated_at: '2026-03-01T10:00:00.000Z', custom_id: 'MyApp_GB' }],
+    } as Response);
+
+    const result = await callList({ provider: 'testmu' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('MyApp.apk');
+    expect(result.content[0].text).toContain('lt://lt-app-1');
+  });
+
+  it('handles non-array response gracefully (both platforms)', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => null,
+    } as Response);
+
+    const result = await callList({ provider: 'testmu' });
+    // Both android+ios fetches return null, parsed as empty arrays → "No apps found."
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toBe('No apps found.');
+  });
+
+  it('returns isError true when credentials are missing', async () => {
+    vi.unstubAllEnvs();
+    const result = await callList({ provider: 'testmu' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('TESTMU_USERNAME');
+  });
+
+  it('returns isError true when fetch fails', async () => {
+    vi.mocked(fetch).mockRejectedValue(new Error('network error'));
+    const result = await callList({ provider: 'testmu' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('network error');
+  });
+});
+
+describe('upload_app tool (TestMu)', () => {
+  beforeEach(() => {
+    vi.stubEnv('TESTMU_USERNAME', 'testuser');
+    vi.stubEnv('TESTMU_ACCESS_KEY', 'testkey');
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.readFileSync).mockReturnValue(Buffer.from('mock-file-content'));
+    vi.spyOn(global, 'fetch');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it('returns isError true when credentials are missing', async () => {
+    vi.unstubAllEnvs();
+    const result = await callUpload({ provider: 'testmu', path: '/some/app.apk' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('TESTMU_USERNAME');
+  });
+
+  it('calls upload endpoint and returns lt:// url', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({ app_id: 'lt-newapp456', name: 'myapp.apk' }),
+    } as Response);
+
+    const result = await callUpload({ provider: 'testmu', path: '/local/myapp.apk' });
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('lt://lt-newapp456');
+
+    const [url] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://manual-api.lambdatest.com/app/upload/realDevice');
+  });
+
+  it('returns isError true when API returns error', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => 'Unauthorized',
+    } as Response);
+
+    const result = await callUpload({ provider: 'testmu', path: '/local/myapp.apk' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('401');
+  });
+});
+
 // ─── Sauce Labs tests ─────────────────────────────────────────────────────────
 
 describe('list_apps tool (Sauce Labs)', () => {
