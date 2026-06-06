@@ -1,6 +1,7 @@
 import { basicAuth } from '../../utils/auth';
 import type { ConnectionConfig, SessionProvider, SessionResult } from '../types';
 import type { Browser as WdioBrowser } from 'webdriverio';
+import LambdaTunnel from '@lambdatest/node-tunnel';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -28,8 +29,6 @@ export class TestMuProvider implements SessionProvider {
 
     const ltOptions: Record<string, unknown> = { w3c: true };
 
-    if (process.env.TESTMU_USERNAME) ltOptions.username = process.env.TESTMU_USERNAME;
-    if (process.env.TESTMU_ACCESS_KEY) ltOptions.accessKey = process.env.TESTMU_ACCESS_KEY;
     if (reporting?.project) ltOptions.project = reporting.project;
     if (reporting?.build) ltOptions.build = reporting.build;
     if (reporting?.session) ltOptions.name = reporting.session;
@@ -55,7 +54,6 @@ export class TestMuProvider implements SessionProvider {
 
     // Mobile browser/emulator mode (e.g. Chrome on Android emulator)
     if (mobileBrowser) {
-      ltOptions.appiumVersion = '2.11.0';
       ltOptions.isRealMobile = false;
       if (options.deviceOrientation) ltOptions.deviceOrientation = options.deviceOrientation;
 
@@ -109,7 +107,6 @@ export class TestMuProvider implements SessionProvider {
     const logFile = join(tmpdir(), 'testmu-tunnel.log');
     console.error(`[TestMu] Starting tunnel "${tunnelName}"`);
     try {
-      const { default: LambdaTunnel } = await import('@lambdatest/node-tunnel');
       const tunnel = new LambdaTunnel();
       await tunnel.start({
         user: process.env.TESTMU_USERNAME ?? '',
@@ -131,37 +128,51 @@ export class TestMuProvider implements SessionProvider {
 
   async onSessionClose(
     sessionId: string,
-    _sessionType: 'browser' | 'ios' | 'android',
+    sessionType: 'browser' | 'ios' | 'android',
     result: SessionResult,
     _tunnelHandle?: unknown,
-    _browser?: WdioBrowser,
+    browser?: WdioBrowser,
     _region?: string,
   ): Promise<void> {
     const user = process.env.TESTMU_USERNAME;
     const key = process.env.TESTMU_ACCESS_KEY;
-    if (user && key) {
+    if (!user || !key) return;
+
+    const status = result.status === 'passed' ? 'passed' : 'failed';
+
+    // Mobile sessions use browser.execute(); web sessions use REST API
+    if (sessionType !== 'browser') {
       try {
-        const auth = basicAuth(user, key);
-        const body = { status_ind: result.status === 'passed' ? 'passed' : 'failed' };
-        const apiUrl = `https://api.lambdatest.com/automation/api/v1/sessions/${sessionId}`;
-        console.error(`[TestMu] Setting session status for ${sessionId}: ${body.status_ind}`);
-        const res = await fetch(apiUrl, {
-          method: 'PATCH',
-          headers: {
-            Authorization: `Basic ${auth}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
-        if (res.ok) {
-          console.error('[TestMu] Session status set successfully via REST API');
-        } else {
-          const resBody = await res.text();
-          console.error(`[TestMu] Failed to set session status: HTTP ${res.status} — ${resBody}`);
-        }
+        console.error(`[TestMu] Setting mobile session status for ${sessionId}: ${status}`);
+        await browser?.execute('lambda-status=' + status);
+        console.error('[TestMu] Mobile session status set successfully via execute');
       } catch (e) {
-        console.error('[TestMu] Failed to set session status via REST API:', e);
+        console.error('[TestMu] Failed to set mobile session status via execute:', e);
       }
+      return;
+    }
+
+    try {
+      const auth = basicAuth(user, key);
+      const body = { status_ind: status };
+      const apiUrl = `https://api.lambdatest.com/automation/api/v1/sessions/${sessionId}`;
+      console.error(`[TestMu] Setting session status for ${sessionId}: ${body.status_ind}`);
+      const res = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        console.error('[TestMu] Session status set successfully via REST API');
+      } else {
+        const resBody = await res.text();
+        console.error(`[TestMu] Failed to set session status: HTTP ${res.status} — ${resBody}`);
+      }
+    } catch (e) {
+      console.error('[TestMu] Failed to set session status via REST API:', e);
     }
   }
 

@@ -2,6 +2,7 @@ import { basicAuth } from '../../utils/auth';
 import type { ConnectionConfig, SessionProvider, SessionResult } from '../types';
 import type { Browser as WdioBrowser } from 'webdriverio';
 import type { SauceLabsOptions } from 'saucelabs';
+import SauceLabs from 'saucelabs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -110,7 +111,6 @@ export class SauceLabsProvider implements SessionProvider {
     const logFile = join(tmpdir(), 'sauce-connect.log');
     console.error(`[SauceLabs] Starting tunnel "${tunnelName}" (region: ${region})`);
     try {
-      const { default: SauceLabs } = await import('saucelabs');
       const api = new SauceLabs({ user: process.env.SAUCE_USERNAME ?? '', key: process.env.SAUCE_ACCESS_KEY ?? '', region } satisfies SauceLabsOptions);
       return api.startSauceConnect({
         tunnelName,

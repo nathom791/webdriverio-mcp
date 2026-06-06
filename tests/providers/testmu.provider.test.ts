@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { Browser } from 'webdriverio';
 import { TestMuProvider } from '../../src/providers/cloud/testmu.provider';
 
 describe('TestMuProvider', () => {
@@ -86,13 +87,6 @@ describe('TestMuProvider', () => {
       expect(lt.w3c).toBe(true);
     });
 
-    it('includes credentials in lt:options', () => {
-      const caps = provider.buildCapabilities({ platform: 'browser', browser: 'chrome' });
-      const lt = caps['lt:options'] as Record<string, unknown>;
-      expect(lt.username).toBe('testuser');
-      expect(lt.accessKey).toBe('testkey');
-    });
-
     it('sets tunnel: true when tunnel is enabled', () => {
       const caps = provider.buildCapabilities({
         platform: 'browser',
@@ -147,7 +141,6 @@ describe('TestMuProvider', () => {
       });
       const lt = caps['lt:options'] as Record<string, unknown>;
       expect(lt.isRealMobile).toBe(false);
-      expect(lt.appiumVersion).toBe('2.11.0');
     });
 
     it('defaults autoGrantPermissions and autoAcceptAlerts to true', () => {
@@ -220,7 +213,7 @@ describe('TestMuProvider', () => {
   });
 
   describe('onSessionClose', () => {
-    it('sends PATCH with status_ind passed to the LambdaTest API', async () => {
+    it('sends REST PATCH for browser sessions', async () => {
       const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
 
       await provider.onSessionClose('session-123', 'browser', { status: 'passed' });
@@ -235,20 +228,24 @@ describe('TestMuProvider', () => {
       );
     });
 
-    it('sends status_ind failed when status is failed', async () => {
-      const fetchSpy = vi.spyOn(global, 'fetch').mockResolvedValue({ ok: true } as Response);
+    it('uses browser.execute for mobile sessions', async () => {
+      const executeSpy = vi.fn().mockResolvedValue(undefined);
+      const mockBrowser = { execute: executeSpy } as unknown as Browser;
 
-      await provider.onSessionClose('session-456', 'android', { status: 'failed' });
+      await provider.onSessionClose('session-456', 'android', { status: 'failed' }, undefined, mockBrowser);
 
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({
-          body: JSON.stringify({ status_ind: 'failed' }),
-        }),
-      );
+      expect(executeSpy).toHaveBeenCalledWith('lambda-status=failed');
     });
 
-    it('does not throw when fetch fails', async () => {
+    it('does not throw when browser.execute fails for mobile', async () => {
+      const mockBrowser = { execute: vi.fn().mockRejectedValue(new Error('session gone')) } as unknown as Browser;
+
+      await expect(
+        provider.onSessionClose('session-789', 'ios', { status: 'passed' }, undefined, mockBrowser),
+      ).resolves.toBeUndefined();
+    });
+
+    it('does not throw when REST PATCH fails for browser', async () => {
       vi.spyOn(global, 'fetch').mockRejectedValue(new Error('network error'));
 
       await expect(

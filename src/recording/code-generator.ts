@@ -290,14 +290,17 @@ export function generateCode(history: SessionHistory): string {
     const ltSteps = steps.replace(/const browser = await remote\(/g, 'browser = await remote(');
     const preamble = 'let browser;\nlet ltStatus = \'passed\';';
     const catchBlock = '} catch (e) {\n  ltStatus = \'failed\';\n  throw e;';
-    const statusUpdate = [
-      "    const ltAuth = Buffer.from(`${process.env.TESTMU_USERNAME}:${process.env.TESTMU_ACCESS_KEY}`).toString('base64');",
-      "    await fetch('https://api.lambdatest.com/automation/api/v1/sessions/' + browser.sessionId, {",
-      "      method: 'PATCH',",
-      "      headers: { Authorization: 'Basic ' + ltAuth, 'Content-Type': 'application/json' },",
-      '      body: JSON.stringify({ status_ind: ltStatus })',
-      '    });',
-    ].join('\n');
+    const isMobile = history.type !== 'browser';
+    const statusUpdate = isMobile
+      ? "    await browser.execute('lambda-status=' + ltStatus);"
+      : [
+        "    const ltAuth = Buffer.from(`${process.env.TESTMU_USERNAME}:${process.env.TESTMU_ACCESS_KEY}`).toString('base64');",
+        "    await fetch('https://api.lambdatest.com/automation/api/v1/sessions/' + browser.sessionId, {",
+        "      method: 'PATCH',",
+        "      headers: { Authorization: 'Basic ' + ltAuth, 'Content-Type': 'application/json' },",
+        '      body: JSON.stringify({ status_ind: ltStatus })',
+        '    });',
+      ].join('\n');
     const finallyLines = [
       '  if (browser) {',
       statusUpdate,
