@@ -1,5 +1,25 @@
 # Changelog
 
+## [3.6.0](https://github.com/webdriverio/mcp/compare/v3.5.1...v3.6.0) (2026-06-07)
+
+### Features
+
+* **lambdatest:** Integrate TestMU hub connection with tunnel, mirroring SauceLabs/BrowserStack ([e89b4ae](https://github.com/webdriverio/mcp/commit/e89b4ae42c77f6bf7f95bef9e61e9d3302b11fcb))
+* **saucelabs:** Integrate SauceLabs as a cloud provider for WebdriverIO MCP sessions ([a53bbc0](https://github.com/webdriverio/mcp/commit/a53bbc010a7a348bd4ca82cbb60421e6bcf6214d))
+
+### Bug Fixes
+
+* **mobile:** Allow mobile browser sessions to start without appPath ([e20b041](https://github.com/webdriverio/mcp/commit/e20b0412fd8ed59bb253e5537dc92619288d9569))
+* **os:** Compute platformName from os + osVersion for browser sessions in case of Testmu and SauceLabs providers ([f3d9404](https://github.com/webdriverio/mcp/commit/f3d940496da52b243848a88f867fbe46a60a542c))
+* **region:** Make `region` property session-specific ([ae215b0](https://github.com/webdriverio/mcp/commit/ae215b0261281f26006abf5b5deb4f96c139e2d7))
+* **testmu:** Address code review findings for appiumVersion, mobile status, credential deduplication ([0c994a8](https://github.com/webdriverio/mcp/commit/0c994a8e9c6fba3cece3d1235ec98150a0dd6172))
+* Use correct ordering of tunnelName in session_start and explicitly include XCUITest with ios platform ([7eb84ec](https://github.com/webdriverio/mcp/commit/7eb84ec841a772adbc37e9aacbbd9b5f353f48c5))
+
+### Refactoring
+
+* **cloud:** Prepare LambdaTest support for cloud-providers ([6071e86](https://github.com/webdriverio/mcp/commit/6071e86445549df678744feed1b60ef8cbece1fa))
+* **tunnel:** Use supported `saucelabs` module instead of deprecated npm package ([dfe8128](https://github.com/webdriverio/mcp/commit/dfe8128176f9c2503883412396b239edd6e5d797))
+
 ## [3.5.1](https://github.com/webdriverio/mcp/compare/v3.5.0...v3.5.1) (2026-05-25)
 
 ### Bug Fixes
