@@ -35,6 +35,7 @@ function generateStep(step: RecordedStep, history: SessionHistory): string {
       const platform = p.platform as string;
       const isBrowserStack = 'bstack:options' in history.capabilities;
       const isSauceLabs = 'sauce:options' in history.capabilities;
+      const isLambdaTest = 'lt:options' in history.capabilities;
       const capJson = indentJson(history.capabilities)
         .split('\n')
         .map((line, i) => (i > 0 ? `  ${line}` : line))
@@ -72,6 +73,26 @@ function generateStep(step: RecordedStep, history: SessionHistory): string {
           "  path: '/wd/hub',",
           '  user: process.env.SAUCE_USERNAME,',
           '  key: process.env.SAUCE_ACCESS_KEY,',
+          `  capabilities: ${capJson}`,
+          `});${nav}`,
+        ].join('\n');
+      }
+
+      if (isLambdaTest) {
+        const isBrowser = platform === 'browser';
+        const hostname = isBrowser ? 'hub.lambdatest.com' : 'mobile-hub.lambdatest.com';
+        const nav =
+          platform === 'browser' && p.navigationUrl
+            ? `\nawait browser.url('${escapeStr(p.navigationUrl)}');`
+            : '';
+        return [
+          'const browser = await remote({',
+          "  protocol: 'https',",
+          `  hostname: '${hostname}',`,
+          '  port: 443,',
+          "  path: '/wd/hub',",
+          '  user: process.env.TESTMU_USERNAME,',
+          '  key: process.env.TESTMU_ACCESS_KEY,',
           `  capabilities: ${capJson}`,
           `});${nav}`,
         ].join('\n');
@@ -142,9 +163,13 @@ function bsStatusUpdateLines(sessionType: 'browser' | 'ios' | 'android'): string
 export function generateCode(history: SessionHistory): string {
   const bstackOptions = history.capabilities['bstack:options'] as Record<string, unknown> | undefined;
   const sauceOptions = history.capabilities['sauce:options'] as Record<string, unknown> | undefined;
+  const ltOptions = history.capabilities['lt:options'] as Record<string, unknown> | undefined;
   const isBrowserStack = bstackOptions !== undefined;
   const isSauceLabs = sauceOptions !== undefined;
-  const usesLocalTunnel = isBrowserStack ? bstackOptions?.local === true : (sauceOptions?.tunnelName !== undefined);
+  const isLambdaTest = ltOptions !== undefined;
+  const usesLocalTunnel = isBrowserStack ? bstackOptions?.local === true
+    : isSauceLabs ? (sauceOptions?.tunnelName !== undefined)
+      : (ltOptions?.tunnel === true);
 
   const steps = history.steps
     .map(step => generateStep(step, history))
@@ -254,6 +279,67 @@ export function generateCode(history: SessionHistory): string {
       preamble,
       'try {',
       slSteps,
+      catchBlock,
+      '} finally {',
+      ...finallyLines,
+      '}',
+    ].join('\n');
+  }
+
+  if (isLambdaTest) {
+    const ltSteps = steps.replace(/const browser = await remote\(/g, 'browser = await remote(');
+    const preamble = 'let browser;\nlet ltStatus = \'passed\';';
+    const catchBlock = '} catch (e) {\n  ltStatus = \'failed\';\n  throw e;';
+    const isMobile = history.type !== 'browser';
+    const statusUpdate = isMobile
+      ? "    await browser.execute('lambda-status=' + ltStatus);"
+      : [
+        "    const ltAuth = Buffer.from(`${process.env.TESTMU_USERNAME}:${process.env.TESTMU_ACCESS_KEY}`).toString('base64');",
+        "    await fetch('https://api.lambdatest.com/automation/api/v1/sessions/' + browser.sessionId, {",
+        "      method: 'PATCH',",
+        "      headers: { Authorization: 'Basic ' + ltAuth, 'Content-Type': 'application/json' },",
+        '      body: JSON.stringify({ status_ind: ltStatus })',
+        '    });',
+      ].join('\n');
+    const finallyLines = [
+      '  if (browser) {',
+      statusUpdate,
+      '    await browser.deleteSession();',
+      '  }',
+    ];
+
+    if (usesLocalTunnel) {
+      const tunnelName = (ltOptions?.tunnelName as string) ?? 'wdio-mcp-tunnel';
+      const tunnelSetup = [
+        '',
+        "import LambdaTunnel from '@lambdatest/node-tunnel';",
+        '',
+        'const tunnel = new LambdaTunnel();',
+        `await tunnel.start({ user: process.env.TESTMU_USERNAME, key: process.env.TESTMU_ACCESS_KEY, tunnelName: '${escapeStr(tunnelName)}' });`,
+        'const stopTunnel = () => tunnel.stop();',
+        '',
+      ].join('\n');
+
+      return [
+        "import { remote } from 'webdriverio';",
+        tunnelSetup,
+        preamble,
+        'try {',
+        ltSteps,
+        catchBlock,
+        '} finally {',
+        ...finallyLines,
+        '  await stopTunnel();',
+        '}',
+      ].join('\n');
+    }
+
+    return [
+      "import { remote } from 'webdriverio';",
+      '',
+      preamble,
+      'try {',
+      ltSteps,
       catchBlock,
       '} finally {',
       ...finallyLines,

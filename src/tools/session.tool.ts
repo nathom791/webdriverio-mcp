@@ -19,13 +19,13 @@ export const startSessionToolDefinition: ToolDefinition = {
   description: 'Starts a browser or mobile automation session. Only one active session at a time — starting a new one closes the existing session first. Use platform "browser" with a browser name, or "ios"/"android" with deviceName. Set attach: true to connect to a running Chrome via CDP instead of launching a new browser.',
   annotations: { title: 'Start Session', destructiveHint: false },
   inputSchema: {
-    provider: z.enum(['local', 'browserstack', 'saucelabs']).optional().default('local').describe('Session provider (default: local)'),
+    provider: z.enum(['local', 'browserstack', 'saucelabs', 'testmu']).optional().default('local').describe('Session provider (default: local)'),
     platform: platformEnum.describe('Session platform type'),
     browser: browserEnum.optional().describe('Browser to launch (required for browser platform)'),
     browserVersion: z.string().optional().describe('Browser version (cloud providers only, default: latest)'),
-    os: z.string().optional().describe('Operating system (cloud providers only, e.g. "Windows", "OS X")'),
-    osVersion: z.string().optional().describe('OS version (cloud providers only, e.g. "11", "Sequoia")'),
-    app: z.string().optional().describe('App URL (bs://...) for BrowserStack or storage:filename= for Sauce Labs mobile sessions'),
+    os: z.string().optional().describe('Operating system for cloud provider browser sessions (e.g. "Windows", "Mac", "macOS", "Linux"). BrowserStack: sets bstack:options.os separately. TestMu/Sauce Labs: combined with osVersion into W3C platformName. Browser platform only.'),
+    osVersion: z.string().optional().describe('OS version for cloud provider browser sessions (e.g. "11", "15", "Monterey"). BrowserStack: sets bstack:options.osVersion separately. TestMu/Sauce Labs: combined with os into W3C platformName. Browser platform only.'),
+    app: z.string().optional().describe('App URL (bs://... for BrowserStack, storage:filename= for Sauce Labs, lt://... for TestMu mobile sessions)'),
     reporting: z.object({
       project: z.string().optional(),
       build: z.string().optional(),
@@ -35,7 +35,7 @@ export const startSessionToolDefinition: ToolDefinition = {
     windowWidth: z.number().min(400).max(3840).optional().default(1920).describe('Browser window width'),
     windowHeight: z.number().min(400).max(2160).optional().default(1080).describe('Browser window height'),
     deviceName: z.string().optional().describe('Mobile device/emulator/simulator name (required for ios/android)'),
-    platformVersion: z.string().optional().describe('OS version (e.g., "17.0", "14")'),
+    platformVersion: z.string().optional().describe('OS version for mobile sessions (e.g., "17.0", "14"). Mobile (ios/android) only.'),
     appPath: z.string().optional().describe('Path to app file (.app/.apk/.ipa)'),
     automationName: automationEnum.optional().describe('Automation driver'),
     autoGrantPermissions: coerceBoolean.optional().describe('Auto-grant app permissions (default: true)'),
@@ -63,13 +63,14 @@ export const startSessionToolDefinition: ToolDefinition = {
     tunnelName: z.string().optional().describe('Tunnel identifier name. With tunnel: "external" this must match the running tunnel. With tunnel: true a unique name is auto-generated if not provided.'),
     browserstackLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable BrowserStack Local tunnel routing.'),
     saucelabsLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable Sauce Connect tunnel routing.'),
+    testmuLocal: z.union([z.literal('external'), coerceBoolean]).optional().describe('Deprecated: use "tunnel" instead. Enable TestMu Tunnel routing.'),
     navigationUrl: z.string().optional().describe('URL to navigate to after starting'),
     capabilities: z.record(z.string(), z.unknown()).optional().describe('Additional capabilities to merge'),
   },
 };
 
 type StartSessionArgs = {
-  provider?: 'local' | 'browserstack' | 'saucelabs';
+  provider?: 'local' | 'browserstack' | 'saucelabs' | 'testmu';
   platform: 'browser' | 'ios' | 'android';
   browser?: 'chrome' | 'firefox' | 'edge' | 'safari';
   browserVersion?: string;
@@ -101,6 +102,7 @@ type StartSessionArgs = {
   tunnelName?: string;
   browserstackLocal?: boolean | 'external';
   saucelabsLocal?: boolean | 'external';
+  testmuLocal?: boolean | 'external';
   navigationUrl?: string;
   capabilities?: Record<string, unknown>;
 };
@@ -192,9 +194,9 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
   const provider = getProvider(args.provider ?? 'local', 'browser');
   const connectionConfig = provider.getConnectionConfig(args as Record<string, unknown>);
 
-  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal/testmuLocal params
   // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
-  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
+  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? args.testmuLocal ?? false;
   const tunnelEnabled = effectiveTunnel === true;
   const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
 
@@ -269,7 +271,10 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
 async function startMobileSession(args: StartSessionArgs): Promise<CallToolResult> {
   const { platform, appPath, app, deviceName, noReset } = args;
 
-  if (!appPath && !app && noReset !== true) {
+  // Mobile browser/emulator mode (e.g. Chrome on Android emulator) — no app required
+  const isMobileBrowser = args.browser !== undefined;
+
+  if (!isMobileBrowser && !appPath && !app && noReset !== true) {
     return {
       content: [{
         type: 'text',
@@ -281,9 +286,9 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
   const provider = getProvider(args.provider ?? 'local', args.platform);
   const serverConfig = provider.getConnectionConfig(args as Record<string, unknown>);
 
-  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal params
+  // Normalize tunnel flag — support legacy browserstackLocal/saucelabsLocal/testmuLocal params
   // MUST compute tunnelName BEFORE buildCapabilities so it is available in the capabilities
-  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? false;
+  const effectiveTunnel = args.tunnel ?? args.browserstackLocal ?? args.saucelabsLocal ?? args.testmuLocal ?? false;
   const tunnelEnabled = effectiveTunnel === true;
   const tunnelName = tunnelEnabled && !args.tunnelName ? `wdio-mcp-${Date.now()}` : args.tunnelName;
 
@@ -323,7 +328,12 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
     startTrace(sessionId, mergedCapabilities, sessionType);
   }
 
-  const appInfo = appPath ? `\nApp: ${appPath}` : '\nApp: (connected to running app)';
+  const sessionKind = isMobileBrowser ? 'mobile browser' : 'app';
+  const appInfo = isMobileBrowser
+    ? `\nBrowser: ${args.browser}`
+    : appPath
+      ? `\nApp: ${appPath}`
+      : '\nApp: (connected to running app)';
   const detachNote = shouldAutoDetach
     ? '\n\n(Auto-detach enabled: session will be preserved on close. Use close_session({ detach: false }) to force terminate.)'
     : '';
@@ -332,7 +342,7 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
     content: [
       {
         type: 'text',
-        text: `${platform} app session started with sessionId: ${sessionId}\nDevice: ${deviceName}${appInfo}\nAppium Server: ${serverConfig.hostname}:${serverConfig.port}${serverConfig.path}${detachNote}`,
+        text: `${platform} ${sessionKind} session started with sessionId: ${sessionId}\nDevice: ${deviceName}${appInfo}\nAppium Server: ${serverConfig.hostname}:${serverConfig.port}${serverConfig.path}${detachNote}`,
       },
     ],
   };

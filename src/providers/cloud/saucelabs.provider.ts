@@ -2,6 +2,7 @@ import { basicAuth } from '../../utils/auth';
 import type { ConnectionConfig, SessionProvider, SessionResult } from '../types';
 import type { Browser as WdioBrowser } from 'webdriverio';
 import type { SauceLabsOptions } from 'saucelabs';
+import SauceLabs from 'saucelabs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -45,11 +46,11 @@ export class SauceLabsProvider implements SessionProvider {
 
     if (platform === 'browser') {
       return {
+        ...userCapabilities,
         browserName: (options.browser as string | undefined) ?? 'chrome',
         browserVersion: (options.browserVersion as string | undefined) ?? 'latest',
-        platformName: (options.os as string | undefined) ?? 'Linux',
+        platformName: options.os ? [options.os as string, options.osVersion as string | undefined].filter(Boolean).join(' ') : 'Linux',
         'sauce:options': sauceOptions,
-        ...userCapabilities,
       };
     }
 
@@ -58,7 +59,6 @@ export class SauceLabsProvider implements SessionProvider {
 
     // Mobile browser/emulator mode (e.g. Chrome on Android emulator)
     if (mobileBrowser) {
-      sauceOptions.appiumVersion = '2.11.0';
       if (options.deviceOrientation) sauceOptions.deviceOrientation = options.deviceOrientation;
 
       const caps: Record<string, unknown> = {
@@ -70,7 +70,7 @@ export class SauceLabsProvider implements SessionProvider {
         'appium:newCommandTimeout': (options.newCommandTimeout as number | undefined) ?? 300,
         'sauce:options': sauceOptions,
       };
-      return { ...caps, ...userCapabilities };
+      return { ...userCapabilities, ...caps };
     }
 
     // Mobile native app mode
@@ -80,6 +80,7 @@ export class SauceLabsProvider implements SessionProvider {
     const autoDismissAlerts = options.autoDismissAlerts as boolean | undefined;
 
     return {
+      ...userCapabilities,
       platformName: platform,
       'appium:app': options.app,
       'appium:deviceName': options.deviceName,
@@ -90,7 +91,6 @@ export class SauceLabsProvider implements SessionProvider {
       'appium:autoDismissAlerts': autoDismissAlerts,
       'appium:newCommandTimeout': (options.newCommandTimeout as number | undefined) ?? 300,
       'sauce:options': sauceOptions,
-      ...userCapabilities,
     };
   }
 
@@ -110,7 +110,6 @@ export class SauceLabsProvider implements SessionProvider {
     const logFile = join(tmpdir(), 'sauce-connect.log');
     console.error(`[SauceLabs] Starting tunnel "${tunnelName}" (region: ${region})`);
     try {
-      const { default: SauceLabs } = await import('saucelabs');
       const api = new SauceLabs({ user: process.env.SAUCE_USERNAME ?? '', key: process.env.SAUCE_ACCESS_KEY ?? '', region } satisfies SauceLabsOptions);
       return api.startSauceConnect({
         tunnelName,

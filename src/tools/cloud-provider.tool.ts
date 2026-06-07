@@ -90,6 +90,33 @@ const PROVIDER_CONFIGS: Record<string, ProviderApiConfig> = {
       return { appRef: `storage:filename=${name}`, appName: name };
     },
   },
+  testmu: {
+    name: 'TestMu',
+    apiBase: 'https://manual-api.lambdatest.com',
+    credsEnvNames: ['TESTMU_USERNAME', 'TESTMU_ACCESS_KEY'],
+    listPath: '/app/data',
+    supportsOrgWide: false,
+    parseListResponse: (raw) => {
+      // LambdaTest returns { data: [...], metaData: {...} }
+      if (raw === null || raw === undefined || typeof raw !== 'object') return [];
+
+      const data = raw as { data?: Record<string, unknown>[] };
+      const apps = data.data ?? (Array.isArray(raw) ? raw as Record<string, unknown>[] : []);
+      return apps.map((a) => ({
+        name: (a.name ?? a.app_name ?? 'unknown') as string,
+        ref: a.app_id ? `lt://${a.app_id}` : `lt://${a.custom_id ?? 'unknown'}`,
+        uploadedAt: a.updated_at as string | undefined,
+        customId: a.custom_id as string | undefined,
+      }));
+    },
+    uploadPath: '/app/upload/realDevice',
+    uploadField: 'appFile',
+    parseUploadResponse: (raw, fileName) => {
+      const data = raw as { app_id?: string; app_url?: string; name?: string };
+      const ref = data.app_id ? `lt://${data.app_id}` : (data.app_url ?? 'unknown');
+      return { appRef: ref, appName: data.name ?? fileName };
+    },
+  },
 };
 
 function getProviderConfig(provider: string, region?: string): { config: ProviderApiConfig; auth: string } | { error: string } {
@@ -113,10 +140,10 @@ function getProviderConfig(provider: string, region?: string): { config: Provide
 
 export const listAppsToolDefinition: ToolDefinition = {
   name: 'list_apps',
-  description: 'List apps uploaded to a cloud provider (BrowserStack App Automate or Sauce Labs App Storage). Reads provider-specific credentials from environment.',
+  description: 'List apps uploaded to a cloud provider (BrowserStack App Automate, Sauce Labs App Storage, or TestMu Real Device Cloud). Reads provider-specific credentials from environment.',
   annotations: { title: 'List Cloud Provider Apps', readOnlyHint: true, idempotentHint: true },
   inputSchema: {
-    provider: z.enum(['browserstack', 'saucelabs']).describe('Cloud provider'),
+    provider: z.enum(['browserstack', 'saucelabs', 'testmu']).describe('Cloud provider'),
     sortBy: z.enum(['app_name', 'uploaded_at']).optional().default('uploaded_at').describe('Sort order for results'),
     organizationWide: coerceBoolean.optional().default(false).describe('(BrowserStack only) List apps uploaded by all users in the organization. Defaults to false (own uploads only).'),
     limit: z.number().int().min(1).optional().default(20).describe('Maximum number of apps to return (only applies when organizationWide is true, default 20)'),
@@ -125,7 +152,7 @@ export const listAppsToolDefinition: ToolDefinition = {
 };
 
 type ListAppsArgs = {
-  provider: 'browserstack' | 'saucelabs';
+  provider: 'browserstack' | 'saucelabs' | 'testmu';
   sortBy?: 'app_name' | 'uploaded_at';
   organizationWide?: boolean;
   limit?: number;
@@ -146,17 +173,43 @@ export const listAppsTool: ToolCallback = async (args: ListAppsArgs) => {
       url = `${config.apiBase}/app-automate/recent_group_apps?limit=${limit}`;
     }
 
-    const res = await fetch(url, {
-      headers: { Authorization: `Basic ${auth}` },
-    });
+    // TestMu requires ?type= param — fetch both platforms and merge
+    let apps: NormalizedApp[] = [];
+    if (provider === 'testmu') {
+      const errors: string[] = [];
+      for (const platform of ['android', 'ios']) {
+        try {
+          const res = await fetch(`${url}?type=${platform}`, {
+            headers: { Authorization: `Basic ${auth}` },
+          });
+          if (res.ok) {
+            const raw = await res.json();
+            apps.push(...config.parseListResponse(raw));
+          } else {
+            const body = await res.text();
+            errors.push(`${config.name} API error ${res.status} (${platform}): ${body}`);
+          }
+        } catch (e) {
+          errors.push(String(e));
+        }
+      }
+      if (apps.length === 0 && errors.length > 0) {
+        const message = errors.length === 1 ? errors[0] : `All platform fetches failed:\n${errors.map(e => `  - ${e}`).join('\n')}`;
+        return { isError: true as const, content: [{ type: 'text' as const, text: `Error listing apps: ${message}` }] };
+      }
+    } else {
+      const res = await fetch(url, {
+        headers: { Authorization: `Basic ${auth}` },
+      });
 
-    if (!res.ok) {
-      const body = await res.text();
-      return { isError: true as const, content: [{ type: 'text' as const, text: `${config.name} API error ${res.status}: ${body}` }] };
+      if (!res.ok) {
+        const body = await res.text();
+        return { isError: true as const, content: [{ type: 'text' as const, text: `${config.name} API error ${res.status}: ${body}` }] };
+      }
+
+      const raw = await res.json();
+      apps = config.parseListResponse(raw);
     }
-
-    const raw = await res.json();
-    let apps = config.parseListResponse(raw);
     apps = sortBy === 'app_name'
       ? apps.sort((a, b) => a.name.localeCompare(b.name))
       : apps.sort((a, b) => (b.uploadedAt ?? '').localeCompare(a.uploadedAt ?? ''));
@@ -170,10 +223,10 @@ export const listAppsTool: ToolCallback = async (args: ListAppsArgs) => {
 
 export const uploadAppToolDefinition: ToolDefinition = {
   name: 'upload_app',
-  description: 'Upload a local .apk or .ipa to a cloud provider (BrowserStack App Automate or Sauce Labs App Storage). Returns the app URL for use in start_session.',
+  description: 'Upload a local .apk or .ipa to a cloud provider (BrowserStack, Sauce Labs, or TestMu). Returns the app URL for use in start_session.',
   annotations: { title: 'Upload App to Cloud Provider', destructiveHint: false },
   inputSchema: {
-    provider: z.enum(['browserstack', 'saucelabs']).describe('Cloud provider'),
+    provider: z.enum(['browserstack', 'saucelabs', 'testmu']).describe('Cloud provider'),
     path: z.string().describe('Absolute path to the .apk or .ipa file'),
     customId: z.string().optional().describe('Optional custom ID for the app (used to reference it later)'),
     region: z.enum(['us-west-1', 'eu-central-1', 'apac-southeast-1']).optional().default('eu-central-1').describe('Sauce Labs region (default: eu-central-1)'),
@@ -181,7 +234,7 @@ export const uploadAppToolDefinition: ToolDefinition = {
 };
 
 type UploadAppArgs = {
-  provider: 'browserstack' | 'saucelabs';
+  provider: 'browserstack' | 'saucelabs' | 'testmu';
   path: string;
   customId?: string;
   region?: 'us-west-1' | 'eu-central-1' | 'apac-southeast-1';
