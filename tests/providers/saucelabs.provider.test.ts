@@ -170,17 +170,6 @@ describe('SauceLabsProvider', () => {
       expect(sauce.appiumVersion).toBe('latest');
     });
 
-    it('sets appiumVersion to 2.11.0 for mobile browser mode', () => {
-      const caps = provider.buildCapabilities({
-        platform: 'android',
-        deviceName: 'Pixel 7',
-        platformVersion: '13',
-        browser: 'chrome',
-      });
-      const sauce = caps['sauce:options'] as Record<string, unknown>;
-      expect(sauce.appiumVersion).toBe('2.11.0');
-    });
-
     it('defaults autoGrantPermissions and autoAcceptAlerts to true', () => {
       const caps = provider.buildCapabilities({
         platform: 'android',

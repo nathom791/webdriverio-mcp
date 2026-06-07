@@ -271,7 +271,10 @@ async function startBrowserSession(args: StartSessionArgs): Promise<CallToolResu
 async function startMobileSession(args: StartSessionArgs): Promise<CallToolResult> {
   const { platform, appPath, app, deviceName, noReset } = args;
 
-  if (!appPath && !app && noReset !== true) {
+  // Mobile browser/emulator mode (e.g. Chrome on Android emulator) — no app required
+  const isMobileBrowser = args.browser !== undefined;
+
+  if (!isMobileBrowser && !appPath && !app && noReset !== true) {
     return {
       content: [{
         type: 'text',
@@ -325,7 +328,12 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
     startTrace(sessionId, mergedCapabilities, sessionType);
   }
 
-  const appInfo = appPath ? `\nApp: ${appPath}` : '\nApp: (connected to running app)';
+  const sessionKind = isMobileBrowser ? 'mobile browser' : 'app';
+  const appInfo = isMobileBrowser
+    ? `\nBrowser: ${args.browser}`
+    : appPath
+      ? `\nApp: ${appPath}`
+      : '\nApp: (connected to running app)';
   const detachNote = shouldAutoDetach
     ? '\n\n(Auto-detach enabled: session will be preserved on close. Use close_session({ detach: false }) to force terminate.)'
     : '';
@@ -334,7 +342,7 @@ async function startMobileSession(args: StartSessionArgs): Promise<CallToolResul
     content: [
       {
         type: 'text',
-        text: `${platform} app session started with sessionId: ${sessionId}\nDevice: ${deviceName}${appInfo}\nAppium Server: ${serverConfig.hostname}:${serverConfig.port}${serverConfig.path}${detachNote}`,
+        text: `${platform} ${sessionKind} session started with sessionId: ${sessionId}\nDevice: ${deviceName}${appInfo}\nAppium Server: ${serverConfig.hostname}:${serverConfig.port}${serverConfig.path}${detachNote}`,
       },
     ],
   };

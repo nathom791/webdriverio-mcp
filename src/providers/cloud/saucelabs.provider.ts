@@ -59,7 +59,6 @@ export class SauceLabsProvider implements SessionProvider {
 
     // Mobile browser/emulator mode (e.g. Chrome on Android emulator)
     if (mobileBrowser) {
-      sauceOptions.appiumVersion = '2.11.0';
       if (options.deviceOrientation) sauceOptions.deviceOrientation = options.deviceOrientation;
 
       const caps: Record<string, unknown> = {

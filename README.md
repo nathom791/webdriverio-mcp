@@ -382,7 +382,7 @@ start_session({
     platform: 'browser',
     browser: 'chrome',
     os: 'Windows',               // combined with osVersion → platformName
-    osVersion: '11',             // e.g. "11", "Sequoia" (optional)
+    osVersion: '11',             // e.g. "11", "15" (numbered Mac naming)
     region: 'eu-central-1',      // default: eu-central-1
     reporting: {
         build: 'v1.2.0',
@@ -450,6 +450,42 @@ start_session({
     platformVersion: '13'
 })
 ```
+
+### Mobile Browser Sessions
+
+Run a browser on a cloud mobile emulator/simulator without uploading an app:
+
+```javascript
+// BrowserStack — Chrome on Android emulator
+start_session({
+    provider: 'browserstack',
+    platform: 'android',
+    browser: 'chrome',
+    deviceName: 'Google Pixel 7',
+    platformVersion: '13'
+})
+
+// Sauce Labs — Safari on iOS simulator
+start_session({
+    provider: 'saucelabs',
+    platform: 'ios',
+    browser: 'safari',
+    deviceName: 'iPhone 15',
+    platformVersion: '18',
+    region: 'eu-central-1'
+})
+
+// LambdaTest — Chrome on Android emulator
+start_session({
+    provider: 'testmu',
+    platform: 'android',
+    browser: 'chrome',
+    deviceName: 'Pixel 7',
+    platformVersion: '13'
+})
+```
+
+> **Note:** Mobile browser sessions do not require `app`, `appPath`, or `noReset`. The provider launches a browser on the emulator directly.
 
 Use `list_apps` to see previously uploaded apps:
 
