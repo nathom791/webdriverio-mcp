@@ -129,7 +129,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderApiConfig> = {
       const apps = data.data ?? (Array.isArray(raw) ? raw as Record<string, unknown>[] : []);
       return apps.map((a) => ({
         name: (a.filename ?? a.name ?? 'unknown') as string,
-        ref: `${a.app_url}`,
+        ref: (a.app_url as string | undefined) ?? 'unknown',
         uploadedAt: a.created_at as string | undefined,
       }));
     },
