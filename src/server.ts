@@ -79,6 +79,14 @@ import { getTabsTool, getTabsToolDefinition } from './tools/get-tabs.tool';
 import { getContextsTool, getContextsToolDefinition } from './tools/get-contexts.tool';
 import { appStateTool, appStateToolDefinition } from './tools/app-state.tool';
 import { getCookiesTool, getCookiesToolDefinition } from './tools/get-cookies.tool';
+import {
+  installWebExtensionTool,
+  installWebExtensionToolDefinition,
+  openWebExtensionPageTool,
+  openWebExtensionPageToolDefinition,
+  uninstallWebExtensionTool,
+  uninstallWebExtensionToolDefinition,
+} from './tools/web-extension.tool';
 
 console.log = (...args) => console.error('[LOG]', ...args);
 console.info = (...args) => console.error('[INFO]', ...args);
@@ -157,6 +165,9 @@ function createServer(): McpServer {
 
   registerTool(executeScriptToolDefinition, instrument('execute_script', executeScriptTool));
   registerTool(getElementsToolDefinition, getElementsTool);
+  registerTool(installWebExtensionToolDefinition, withRecording('install_web_extension', installWebExtensionTool));
+  registerTool(uninstallWebExtensionToolDefinition, withRecording('uninstall_web_extension', uninstallWebExtensionTool));
+  registerTool(openWebExtensionPageToolDefinition, instrument('open_web_extension_page', openWebExtensionPageTool));
 
   registerTool(listAppsToolDefinition, listAppsTool);
   registerTool(uploadAppToolDefinition, uploadAppTool);

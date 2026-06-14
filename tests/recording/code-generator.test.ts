@@ -221,6 +221,40 @@ describe('generateCode - tool mappings', () => {
     }]));
     expect(code).toContain("await browser.$('#from').dragAndDrop({ x: 50, y: 75 });");
   });
+
+  it('install_web_extension → browser.webExtensionInstall()', () => {
+    const code = generateCode(makeHistory([{
+      tool: 'install_web_extension',
+      params: { extensionData: { type: 'path', path: '/tmp/ext' } },
+    }]));
+    expect(code).toContain('await browser.webExtensionInstall({ extensionData:');
+    expect(code).toContain('"type": "path"');
+    expect(code).toContain('/tmp/ext');
+  });
+
+  it('uninstall_web_extension → browser.webExtensionUninstall()', () => {
+    const code = generateCode(makeHistory([{
+      tool: 'uninstall_web_extension',
+      params: { extension: 'ext-123' },
+    }]));
+    expect(code).toContain("await browser.webExtensionUninstall({ extension: 'ext-123' });");
+  });
+
+  it('open_web_extension_page with url → browser.url()', () => {
+    const code = generateCode(makeHistory([{
+      tool: 'open_web_extension_page',
+      params: { url: 'chrome-extension://ext-123/options.html' },
+    }]));
+    expect(code).toContain("await browser.url('chrome-extension://ext-123/options.html');");
+  });
+
+  it('open_web_extension_page with extension/path → browser.url()', () => {
+    const code = generateCode(makeHistory([{
+      tool: 'open_web_extension_page',
+      params: { extension: 'ext-123', path: '/options.html', scheme: 'chrome-extension' },
+    }]));
+    expect(code).toContain("await browser.url('chrome-extension://ext-123/options.html');");
+  });
 });
 
 describe('generateCode - BrowserStack Local tunnel', () => {

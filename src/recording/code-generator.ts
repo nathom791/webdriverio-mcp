@@ -160,6 +160,21 @@ function generateStep(step: RecordedStep, history: SessionHistory): string {
       const scriptArgs = (p.args as unknown[])?.length ? `, ${indentJson(p.args)}` : '';
       return `await browser.execute(${scriptCode}${scriptArgs});`;
     }
+    case 'install_web_extension':
+      return `await browser.webExtensionInstall({ extensionData: ${indentJson(p.extensionData)} });`;
+    case 'uninstall_web_extension':
+      return `await browser.webExtensionUninstall({ extension: '${escapeStr(p.extension)}' });`;
+    case 'open_web_extension_page': {
+      if (p.url !== undefined) {
+        return `await browser.url('${escapeStr(p.url)}');`;
+      }
+      const scheme = p.scheme ?? 'chrome-extension';
+      const extensionPath = p.path === undefined ? '' : String(p.path).replace(/^\/+/, '');
+      if (p.extension === undefined) {
+        return '// open_web_extension_page omitted: replay requires extension or url';
+      }
+      return `await browser.url('${escapeStr(scheme)}://${escapeStr(p.extension)}/${escapeStr(extensionPath)}');`;
+    }
     default:
       return `// [unknown tool] ${step.tool}`;
   }
