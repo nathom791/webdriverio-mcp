@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ToolCallback } from '@modelcontextprotocol/sdk/server/mcp';
 import { getState } from '../../src/session/state';
+import { getSessionHistory, withRecording } from '../../src/recording/step-recorder';
 import {
   installWebExtensionTool,
   openWebExtensionPageTool,
@@ -14,10 +16,12 @@ type ToolFn = (args: Record<string, unknown>) => Promise<{
   content: { text: string }[];
   isError?: boolean;
 }>;
+type AnyToolFn = (params: Record<string, unknown>, extra: unknown) => Promise<unknown>;
 
 const callInstall = installWebExtensionTool as unknown as ToolFn;
 const callUninstall = uninstallWebExtensionTool as unknown as ToolFn;
 const callOpen = openWebExtensionPageTool as unknown as ToolFn;
+const extra = {} as Parameters<ToolCallback>[1];
 
 function setupSession(options: {
   type?: 'browser' | 'ios' | 'android';
@@ -191,6 +195,19 @@ describe('open_web_extension_page', () => {
     await callOpen({ path: 'popup.html' });
 
     expect(mockUrl).toHaveBeenCalledWith('moz-extension://firefox-ext/popup.html');
+  });
+
+  it('records the inferred moz-extension scheme for Firefox', async () => {
+    setupSession({ browserName: 'firefox', isFirefox: true, webExtensions: ['firefox-ext'] });
+    const wrapped = withRecording('open_web_extension_page', openWebExtensionPageTool) as unknown as AnyToolFn;
+    await wrapped({ path: 'popup.html' }, extra);
+
+    const steps = getSessionHistory().get('test-session')?.steps ?? [];
+    expect(steps[0]).toMatchObject({
+      tool: 'open_web_extension_page',
+      status: 'ok',
+      params: { path: 'popup.html', scheme: 'moz-extension' },
+    });
   });
 
   it('uses explicit extension and scheme when provided', async () => {

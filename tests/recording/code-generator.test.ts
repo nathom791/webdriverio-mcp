@@ -227,7 +227,7 @@ describe('generateCode - tool mappings', () => {
       tool: 'install_web_extension',
       params: { extensionData: { type: 'path', path: '/tmp/ext' } },
     }]));
-    expect(code).toContain('await browser.webExtensionInstall({ extensionData:');
+    expect(code).toContain('const { extension } = await browser.webExtensionInstall({ extensionData:');
     expect(code).toContain('"type": "path"');
     expect(code).toContain('/tmp/ext');
   });
@@ -254,6 +254,62 @@ describe('generateCode - tool mappings', () => {
       params: { extension: 'ext-123', path: '/options.html', scheme: 'chrome-extension' },
     }]));
     expect(code).toContain("await browser.url('chrome-extension://ext-123/options.html');");
+  });
+
+  it('open_web_extension_page uses latest installed extension variable when extension is omitted', () => {
+    const code = generateCode(makeHistory([
+      {
+        tool: 'install_web_extension',
+        params: { extensionData: { type: 'path', path: '/tmp/ext' } },
+      },
+      {
+        tool: 'open_web_extension_page',
+        params: { path: '/options.html', scheme: 'chrome-extension' },
+      },
+    ]));
+
+    expect(code).toContain('const { extension } = await browser.webExtensionInstall({ extensionData:');
+    expect(code).toContain('await browser.url(`chrome-extension://${extension}/options.html`);');
+    expect(code).not.toContain('open_web_extension_page omitted');
+  });
+
+  it('open_web_extension_page infers moz-extension for legacy Firefox recordings without scheme', () => {
+    const history = makeHistory([
+      {
+        tool: 'install_web_extension',
+        params: { extensionData: { type: 'path', path: '/tmp/firefox-ext' } },
+      },
+      {
+        tool: 'open_web_extension_page',
+        params: { path: 'popup.html' },
+      },
+    ]);
+    history.capabilities = { browserName: 'firefox' };
+
+    const code = generateCode(history);
+
+    expect(code).toContain('await browser.url(`moz-extension://${extension}/popup.html`);');
+  });
+
+  it('open_web_extension_page uses the latest variable after multiple extension installs', () => {
+    const code = generateCode(makeHistory([
+      {
+        tool: 'install_web_extension',
+        params: { extensionData: { type: 'path', path: '/tmp/ext-1' } },
+      },
+      {
+        tool: 'install_web_extension',
+        params: { extensionData: { type: 'path', path: '/tmp/ext-2' } },
+      },
+      {
+        tool: 'open_web_extension_page',
+        params: { path: 'popup.html' },
+      },
+    ]));
+
+    expect(code).toContain('const { extension } = await browser.webExtensionInstall({ extensionData:');
+    expect(code).toContain('const { extension: extension2 } = await browser.webExtensionInstall({ extensionData:');
+    expect(code).toContain('await browser.url(`chrome-extension://${extension2}/popup.html`);');
   });
 });
 

@@ -234,6 +234,10 @@ export const openWebExtensionPageTool: ToolCallback = async (args: OpenWebExtens
     const session = getBrowserSession();
     if (isToolResult(session)) return session;
 
+    if (args.url === undefined && args.scheme === undefined) {
+      args.scheme = inferExtensionScheme(session.browser);
+    }
+
     const targetUrl = resolveExtensionUrl(session, args);
     if (!targetUrl) {
       return {
