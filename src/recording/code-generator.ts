@@ -19,17 +19,12 @@ function indentJson(value: unknown): string {
     .join('\n');
 }
 
-type GenerationContext = {
-  webExtensionInstallCount: number;
-  latestWebExtensionVar?: string;
-};
-
 function inferExtensionScheme(history: SessionHistory): 'chrome-extension' | 'moz-extension' {
   const browserName = String(history.capabilities.browserName ?? '').toLowerCase();
   return browserName.includes('firefox') ? 'moz-extension' : 'chrome-extension';
 }
 
-function generateStep(step: RecordedStep, history: SessionHistory, context: GenerationContext): string {
+function generateStep(step: RecordedStep, history: SessionHistory): string {
   if (step.tool === '__session_transition__') {
     const newId = (step.params.newSessionId as string) ?? 'unknown';
     return `// --- new session: ${newId} started at ${step.timestamp} ---`;
@@ -197,30 +192,13 @@ function generateStep(step: RecordedStep, history: SessionHistory, context: Gene
       const scriptArgs = (p.args as unknown[])?.length ? `, ${indentJson(p.args)}` : '';
       return `await browser.execute(${scriptCode}${scriptArgs});`;
     }
-    case 'install_web_extension': {
-      context.webExtensionInstallCount += 1;
-      const extensionVar = context.webExtensionInstallCount === 1
-        ? 'extension'
-        : `extension${context.webExtensionInstallCount}`;
-      context.latestWebExtensionVar = extensionVar;
-      const extensionBinding = extensionVar === 'extension' ? 'extension' : `extension: ${extensionVar}`;
-      return `const { ${extensionBinding} } = await browser.webExtensionInstall({ extensionData: ${indentJson(p.extensionData)} });`;
-    }
-    case 'uninstall_web_extension':
-      return `await browser.webExtensionUninstall({ extension: '${escapeStr(p.extension)}' });`;
-    case 'open_web_extension_page': {
-      if (p.url !== undefined) {
-        return `await browser.url('${escapeStr(p.url)}');`;
-      }
+    case 'open_web_extension': {
       const scheme = p.scheme ?? inferExtensionScheme(history);
-      const extensionPath = p.path === undefined ? '' : String(p.path).replace(/^\/+/, '');
-      if (p.extension === undefined) {
-        if (context.latestWebExtensionVar !== undefined) {
-          return `await browser.url(\`${escapeStr(scheme)}://\${${context.latestWebExtensionVar}}/${escapeStr(extensionPath)}\`);`;
-        }
-        return '// open_web_extension_page omitted: replay requires extension or url';
-      }
-      return `await browser.url('${escapeStr(scheme)}://${escapeStr(p.extension)}/${escapeStr(extensionPath)}');`;
+      const extensionPath = String(p.path).replace(/^\/+/, '');
+      return [
+        `const { extension } = await browser.webExtensionInstall({ extensionData: ${indentJson(p.extensionData)} });`,
+        `await browser.url(\`${escapeStr(scheme)}://\${extension}/${escapeStr(extensionPath)}\`);`,
+      ].join('\n');
     }
     default:
       return `// [unknown tool] ${step.tool}`;
@@ -257,9 +235,8 @@ export function generateCode(history: SessionHistory): string {
       : isLambdaTest ? (ltOptions?.tunnel === true)
         : (tbOptions?.tunnel === true);
 
-  const context: GenerationContext = { webExtensionInstallCount: 0 };
   const steps = history.steps
-    .map(step => generateStep(step, history, context))
+    .map(step => generateStep(step, history))
     .join('\n')
     .split('\n')
     .map(line => `  ${line}`)

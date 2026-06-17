@@ -704,9 +704,7 @@ Both tools require a `provider` parameter (`'browserstack'`, `'saucelabs'`, `'te
 | `launch_chrome`  | Launch a new Chrome instance with remote debugging enabled (for use with `start_session({ attach: true })`)                                                            |
 | `close_session`  | Close or detach from the current session (supports `detach: true` to disconnect without terminating)                                                                   |
 | `emulate_device` | Emulate a mobile/tablet device preset (viewport, DPR, UA, touch); requires BiDi session                                                                                |
-| `install_web_extension` | Install a web extension through WebDriver BiDi (`path`, `archivePath`, or `base64` extension data)                                                              |
-| `uninstall_web_extension` | Uninstall a web extension by id through WebDriver BiDi                                                                                                       |
-| `open_web_extension_page` | Open an installed extension page so normal page tools can drive its UI                                                                                       |
+| `open_web_extension` | Install a web extension through WebDriver BiDi and open one of its extension pages so normal page tools can drive its UI                                           |
 
 ### Navigation & Page Interaction (Web & Mobile)
 
@@ -893,18 +891,19 @@ emulate_device({device: 'reset'})        // restore desktop defaults
 ```javascript
 start_session({platform: 'browser', browser: 'chrome', capabilities: {webSocketUrl: true}})
 
-install_web_extension({
-    extensionData: {type: 'path', path: '/path/to/unpacked-extension'}
+open_web_extension({
+    extensionData: {type: 'path', path: '/path/to/unpacked-extension'},
+    path: 'options.html'
 })
 
-// Open and drive the extension UI with the normal page tools.
-open_web_extension_page({path: 'options.html'})
+// Drive the extension UI with the normal page tools.
 get_elements()
 click_element({selector: '#save'})
 
 // For remote/cloud sessions, send a packaged extension archive as base64.
-install_web_extension({
-    extensionData: {type: 'base64', value: '<base64-encoded-zip>'}
+open_web_extension({
+    extensionData: {type: 'base64', value: '<base64-encoded-zip>'},
+    path: 'options.html'
 })
 ```
 

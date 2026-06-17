@@ -5,8 +5,6 @@ export interface SessionMetadata {
   capabilities: Record<string, unknown>;
   isAttached: boolean;
   provider?: 'local' | 'browserstack' | 'saucelabs' | 'testmu' | 'testingbot' | 'digitalai';
-  webExtensions?: string[];
-  provider?: 'local' | 'browserstack' | 'saucelabs' | 'testmu' | 'testingbot';
   region?: string;
   tunnelName?: string;
   tunnelHandle?: unknown;

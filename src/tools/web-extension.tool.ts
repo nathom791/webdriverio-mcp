@@ -13,26 +13,15 @@ type WebExtensionInstallResult = { extension: string };
 
 type WebExtensionBrowser = WebdriverIO.Browser & {
   webExtensionInstall?: (params: { extensionData: WebExtensionData }) => Promise<WebExtensionInstallResult>;
-  webExtensionUninstall?: (params: { extension: string }) => Promise<Record<string, never> | null>;
 };
 
 type BrowserSession = {
   browser: WebExtensionBrowser;
-  sessionId: string;
 };
 
-type InstallWebExtensionArgs = {
+type OpenWebExtensionArgs = {
   extensionData: WebExtensionData;
-};
-
-type UninstallWebExtensionArgs = {
-  extension: string;
-};
-
-type OpenWebExtensionPageArgs = {
-  extension?: string;
-  path?: string;
-  url?: string;
+  path: string;
   scheme?: 'chrome-extension' | 'moz-extension';
 };
 
@@ -81,39 +70,11 @@ function getBrowserSession(): BrowserSession | CallToolResult {
     };
   }
 
-  return { browser, sessionId };
+  return { browser };
 }
 
 function isToolResult(value: BrowserSession | CallToolResult): value is CallToolResult {
   return 'content' in value;
-}
-
-function rememberExtension(sessionId: string, extension: string): void {
-  const state = getState();
-  const metadata = state.sessionMetadata.get(sessionId);
-  if (!metadata) return;
-
-  const extensions = metadata.webExtensions ?? [];
-  if (!extensions.includes(extension)) {
-    extensions.push(extension);
-  }
-  metadata.webExtensions = extensions;
-}
-
-function forgetExtension(sessionId: string, extension: string): void {
-  const state = getState();
-  const metadata = state.sessionMetadata.get(sessionId);
-  if (!metadata?.webExtensions) return;
-
-  metadata.webExtensions = metadata.webExtensions.filter((id) => id !== extension);
-  if (metadata.webExtensions.length === 0) {
-    delete metadata.webExtensions;
-  }
-}
-
-function getLatestExtension(sessionId: string): string | undefined {
-  const extensions = getState().sessionMetadata.get(sessionId)?.webExtensions;
-  return extensions?.[extensions.length - 1];
 }
 
 function inferExtensionScheme(browser: WebExtensionBrowser): 'chrome-extension' | 'moz-extension' {
@@ -121,52 +82,21 @@ function inferExtensionScheme(browser: WebExtensionBrowser): 'chrome-extension' 
   return browser.isFirefox || browserName.includes('firefox') ? 'moz-extension' : 'chrome-extension';
 }
 
-function normalizeExtensionPath(path?: string): string {
-  if (!path) return '';
+function normalizeExtensionPath(path: string): string {
   return path.replace(/^\/+/, '');
 }
 
-function resolveExtensionUrl(session: BrowserSession, args: OpenWebExtensionPageArgs): string | undefined {
-  if (args.url) return args.url;
-
-  const extensionId = args.extension ?? getLatestExtension(session.sessionId);
-  if (!extensionId) return undefined;
-
-  const scheme = args.scheme ?? inferExtensionScheme(session.browser);
-  return `${scheme}://${extensionId}/${normalizeExtensionPath(args.path)}`;
-}
-
-export const installWebExtensionToolDefinition: ToolDefinition = {
-  name: 'install_web_extension',
-  description: 'Installs a web extension through the W3C WebDriver BiDi webExtension.install command. Requires a BiDi-enabled browser session. Use base64 for cloud/remote sessions where the browser driver cannot read the MCP server filesystem.',
-  annotations: { title: 'Install Web Extension', destructiveHint: false },
+export const openWebExtensionToolDefinition: ToolDefinition = {
+  name: 'open_web_extension',
+  description: 'Installs a web extension through WebDriver BiDi and opens one of its extension pages so existing MCP tools can inspect and drive its UI. Requires a BiDi-enabled browser session. Use base64 for cloud/remote sessions where the browser driver cannot read the MCP server filesystem.',
+  annotations: { title: 'Open Web Extension', destructiveHint: false },
   inputSchema: {
     extensionData: extensionDataSchema.describe('W3C BiDi webExtension.ExtensionData: unpacked directory path, archive path, or base64 archive.'),
+    path: z.string().min(1).describe('Path inside the extension package, such as options.html or popup.html. Leading slashes are ignored.'),
   },
 };
 
-export const uninstallWebExtensionToolDefinition: ToolDefinition = {
-  name: 'uninstall_web_extension',
-  description: 'Uninstalls a previously installed web extension through the W3C WebDriver BiDi webExtension.uninstall command.',
-  annotations: { title: 'Uninstall Web Extension', destructiveHint: true },
-  inputSchema: {
-    extension: z.string().min(1).describe('Extension id returned by install_web_extension.'),
-  },
-};
-
-export const openWebExtensionPageToolDefinition: ToolDefinition = {
-  name: 'open_web_extension_page',
-  description: 'Opens an installed extension page so existing MCP tools can inspect and drive its UI. Provide url directly, or provide extension/path to build a chrome-extension:// or moz-extension:// URL.',
-  annotations: { title: 'Open Web Extension Page', destructiveHint: false },
-  inputSchema: {
-    extension: z.string().min(1).optional().describe('Extension id. Defaults to the most recently installed extension in the active session.'),
-    path: z.string().optional().describe('Path inside the extension package, such as options.html or popup.html. Leading slashes are ignored.'),
-    url: z.string().min(1).optional().describe('Full extension URL to open directly. If set, extension/path/scheme are ignored.'),
-    scheme: z.enum(['chrome-extension', 'moz-extension']).optional().describe('Extension URL scheme. Defaults to moz-extension for Firefox and chrome-extension otherwise.'),
-  },
-};
-
-export const installWebExtensionTool: ToolCallback = async ({ extensionData }: InstallWebExtensionArgs): Promise<CallToolResult> => {
+export const openWebExtensionTool: ToolCallback = async (args: OpenWebExtensionArgs): Promise<CallToolResult> => {
   try {
     const session = getBrowserSession();
     if (isToolResult(session)) return session;
@@ -181,7 +111,7 @@ export const installWebExtensionTool: ToolCallback = async ({ extensionData }: I
       };
     }
 
-    const result = await session.browser.webExtensionInstall({ extensionData });
+    const result = await session.browser.webExtensionInstall({ extensionData: args.extensionData });
     if (!result?.extension || typeof result.extension !== 'string') {
       return {
         isError: true,
@@ -189,71 +119,19 @@ export const installWebExtensionTool: ToolCallback = async ({ extensionData }: I
       };
     }
 
-    rememberExtension(session.sessionId, result.extension);
-    return {
-      content: [{ type: 'text', text: `Installed web extension: ${result.extension}` }],
-    };
-  } catch (e) {
-    return {
-      isError: true,
-      content: [{ type: 'text', text: `Error installing web extension: ${e}` }],
-    };
-  }
-};
+    const scheme = args.scheme ?? inferExtensionScheme(session.browser);
+    args.scheme = scheme;
 
-export const uninstallWebExtensionTool: ToolCallback = async ({ extension }: UninstallWebExtensionArgs): Promise<CallToolResult> => {
-  try {
-    const session = getBrowserSession();
-    if (isToolResult(session)) return session;
-
-    if (typeof session.browser.webExtensionUninstall !== 'function') {
-      return {
-        isError: true,
-        content: [{
-          type: 'text',
-          text: 'Error: the active WebdriverIO browser does not expose webExtensionUninstall. Upgrade WebdriverIO or use a browser driver with WebDriver BiDi webExtension support.',
-        }],
-      };
-    }
-
-    await session.browser.webExtensionUninstall({ extension });
-    forgetExtension(session.sessionId, extension);
-    return {
-      content: [{ type: 'text', text: `Uninstalled web extension: ${extension}` }],
-    };
-  } catch (e) {
-    return {
-      isError: true,
-      content: [{ type: 'text', text: `Error uninstalling web extension: ${e}` }],
-    };
-  }
-};
-
-export const openWebExtensionPageTool: ToolCallback = async (args: OpenWebExtensionPageArgs): Promise<CallToolResult> => {
-  try {
-    const session = getBrowserSession();
-    if (isToolResult(session)) return session;
-
-    if (args.url === undefined && args.scheme === undefined) {
-      args.scheme = inferExtensionScheme(session.browser);
-    }
-
-    const targetUrl = resolveExtensionUrl(session, args);
-    if (!targetUrl) {
-      return {
-        isError: true,
-        content: [{ type: 'text', text: 'Error: provide url, extension, or install a web extension first.' }],
-      };
-    }
-
+    const targetUrl = `${scheme}://${result.extension}/${normalizeExtensionPath(args.path)}`;
     await session.browser.url(targetUrl);
+
     return {
       content: [{ type: 'text', text: `Opened web extension page: ${targetUrl}` }],
     };
   } catch (e) {
     return {
       isError: true,
-      content: [{ type: 'text', text: `Error opening web extension page: ${e}` }],
+      content: [{ type: 'text', text: `Error opening web extension: ${e}` }],
     };
   }
 };
