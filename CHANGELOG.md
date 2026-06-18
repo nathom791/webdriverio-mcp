@@ -1,5 +1,7 @@
 # Changelog
 
+## [3.9.0](https://github.com/webdriverio/mcp/compare/v3.8.0...v3.9.0) (2026-06-18)
+
 ## [3.8.0](https://github.com/webdriverio/mcp/compare/v3.7.0...v3.8.0) (2026-06-16)
 
 ### Features
