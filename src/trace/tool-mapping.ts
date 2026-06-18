@@ -13,6 +13,7 @@ const TOOL_MAP: Record<string, TraceAction> = {
   drag_and_drop: { class: 'Element', method: 'dragTo' },
   execute_script: { class: 'Page', method: 'evaluate' },
   launch_chrome: { class: 'Browser', method: 'launch' },
+  open_web_extension: { class: 'Page', method: 'navigate' },
 };
 
 export function mapToolToTraceAction(toolName: string): TraceAction | null {

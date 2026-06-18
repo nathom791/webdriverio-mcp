@@ -19,6 +19,11 @@ function indentJson(value: unknown): string {
     .join('\n');
 }
 
+function inferExtensionScheme(history: SessionHistory): 'chrome-extension' | 'moz-extension' {
+  const browserName = String(history.capabilities.browserName ?? '').toLowerCase();
+  return browserName.includes('firefox') ? 'moz-extension' : 'chrome-extension';
+}
+
 function generateStep(step: RecordedStep, history: SessionHistory): string {
   if (step.tool === '__session_transition__') {
     const newId = (step.params.newSessionId as string) ?? 'unknown';
@@ -186,6 +191,14 @@ function generateStep(step: RecordedStep, history: SessionHistory): string {
       const scriptCode = `'${escapeStr(p.script)}'`;
       const scriptArgs = (p.args as unknown[])?.length ? `, ${indentJson(p.args)}` : '';
       return `await browser.execute(${scriptCode}${scriptArgs});`;
+    }
+    case 'open_web_extension': {
+      const scheme = p.scheme ?? inferExtensionScheme(history);
+      const extensionPath = String(p.path).replace(/^\/+/, '');
+      return [
+        `const { extension } = await browser.webExtensionInstall({ extensionData: ${indentJson(p.extensionData)} });`,
+        `await browser.url(\`${escapeStr(scheme)}://\${extension}/${escapeStr(extensionPath)}\`);`,
+      ].join('\n');
     }
     default:
       return `// [unknown tool] ${step.tool}`;

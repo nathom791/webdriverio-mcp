@@ -704,6 +704,7 @@ Both tools require a `provider` parameter (`'browserstack'`, `'saucelabs'`, `'te
 | `launch_chrome`  | Launch a new Chrome instance with remote debugging enabled (for use with `start_session({ attach: true })`)                                                            |
 | `close_session`  | Close or detach from the current session (supports `detach: true` to disconnect without terminating)                                                                   |
 | `emulate_device` | Emulate a mobile/tablet device preset (viewport, DPR, UA, touch); requires BiDi session                                                                                |
+| `open_web_extension` | Install a web extension through WebDriver BiDi and open one of its extension pages so normal page tools can drive its UI                                           |
 
 ### Navigation & Page Interaction (Web & Mobile)
 
@@ -883,6 +884,27 @@ emulate_device()                         // list available presets
 emulate_device({device: 'iPhone 15'})    // activate emulation
 emulate_device({device: 'Pixel 7'})      // switch device
 emulate_device({device: 'reset'})        // restore desktop defaults
+```
+
+**Web extensions (requires BiDi session):**
+
+```javascript
+start_session({platform: 'browser', browser: 'chrome', capabilities: {webSocketUrl: true}})
+
+open_web_extension({
+    extensionData: {type: 'path', path: '/path/to/unpacked-extension'},
+    path: 'options.html'
+})
+
+// Drive the extension UI with the normal page tools.
+get_elements()
+click_element({selector: '#save'})
+
+// For remote/cloud sessions, send a packaged extension archive as base64.
+open_web_extension({
+    extensionData: {type: 'base64', value: '<base64-encoded-zip>'},
+    path: 'options.html'
+})
 ```
 
 ### Mobile App Automation

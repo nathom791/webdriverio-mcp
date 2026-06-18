@@ -79,6 +79,7 @@ import { getTabsTool, getTabsToolDefinition } from './tools/get-tabs.tool';
 import { getContextsTool, getContextsToolDefinition } from './tools/get-contexts.tool';
 import { appStateTool, appStateToolDefinition } from './tools/app-state.tool';
 import { getCookiesTool, getCookiesToolDefinition } from './tools/get-cookies.tool';
+import { openWebExtensionTool, openWebExtensionToolDefinition } from './tools/web-extension.tool';
 
 console.log = (...args) => console.error('[LOG]', ...args);
 console.info = (...args) => console.error('[INFO]', ...args);
@@ -157,6 +158,7 @@ function createServer(): McpServer {
 
   registerTool(executeScriptToolDefinition, instrument('execute_script', executeScriptTool));
   registerTool(getElementsToolDefinition, getElementsTool);
+  registerTool(openWebExtensionToolDefinition, instrument('open_web_extension', openWebExtensionTool));
 
   registerTool(listAppsToolDefinition, listAppsTool);
   registerTool(uploadAppToolDefinition, uploadAppTool);

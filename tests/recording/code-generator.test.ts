@@ -257,6 +257,39 @@ describe('generateCode - tool mappings', () => {
     }]));
     expect(code).toContain("await browser.$('#from').dragAndDrop({ x: 50, y: 75 });");
   });
+
+  it('open_web_extension → browser.webExtensionInstall() and browser.url()', () => {
+    const code = generateCode(makeHistory([{
+      tool: 'open_web_extension',
+      params: { extensionData: { type: 'path', path: '/tmp/ext' }, path: 'options.html', scheme: 'chrome-extension' },
+    }]));
+
+    expect(code).toContain('const { extension } = await browser.webExtensionInstall({ extensionData:');
+    expect(code).toContain('"type": "path"');
+    expect(code).toContain('/tmp/ext');
+    expect(code).toContain('await browser.url(`chrome-extension://${extension}/options.html`);');
+  });
+
+  it('open_web_extension strips leading slashes in generated navigation URL', () => {
+    const code = generateCode(makeHistory([{
+      tool: 'open_web_extension',
+      params: { extensionData: { type: 'path', path: '/tmp/ext' }, path: '/options.html', scheme: 'chrome-extension' },
+    }]));
+
+    expect(code).toContain('await browser.url(`chrome-extension://${extension}/options.html`);');
+  });
+
+  it('open_web_extension infers moz-extension for recordings without scheme', () => {
+    const history = makeHistory([{
+      tool: 'open_web_extension',
+      params: { extensionData: { type: 'path', path: '/tmp/firefox-ext' }, path: 'popup.html' },
+    }]);
+    history.capabilities = { browserName: 'firefox' };
+
+    const code = generateCode(history);
+
+    expect(code).toContain('await browser.url(`moz-extension://${extension}/popup.html`);');
+  });
 });
 
 describe('generateCode - BrowserStack Local tunnel', () => {
